@@ -1,0 +1,64 @@
+<h2>Annotation Visual Style</h2>
+<p class="subtitle">How should labels connect to the buttons they describe?</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 32px; background: #1a1a2e; position: relative; min-height: 200px;">
+      <!-- Simulated button -->
+      <div style="position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 32px; height: 32px; border-radius: 6px; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.3); display: flex; align-items: center; justify-content: center; color: #d4af37; font-size: 14px;">⚡</div>
+      <!-- Leader line -->
+      <svg style="position: absolute; top: 72px; left: 50%; width: 60px; height: 50px; overflow: visible;">
+        <line x1="0" y1="0" x2="30" y2="40" stroke="rgba(212,175,55,0.6)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="0" cy="0" r="3" fill="#d4af37"/>
+      </svg>
+      <!-- Label -->
+      <div style="position: absolute; top: 115px; left: 50%; transform: translateX(-10%); background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.3); border-radius: 8px; padding: 8px 14px; white-space: nowrap;">
+        <div style="color: #d4af37; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">AI TRANSLATE</div>
+        <div style="color: rgba(255,255,255,0.5); font-size: 10px; margin-top: 2px;">Ctrl+Enter</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Dashed Leader Lines</h3>
+      <p>Thin dashed lines with a dot at the button end. Gold-tinted label cards. Elegant, doesn't overpower the UI.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 32px; background: #1a1a2e; position: relative; min-height: 200px;">
+      <!-- Simulated button -->
+      <div style="position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 32px; height: 32px; border-radius: 6px; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.3); display: flex; align-items: center; justify-content: center; color: #d4af37; font-size: 14px;">⚡</div>
+      <!-- Solid arrow -->
+      <svg style="position: absolute; top: 72px; left: 50%; width: 60px; height: 50px; overflow: visible;">
+        <line x1="0" y1="0" x2="30" y2="40" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+        <polygon points="26,32 34,32 30,42" fill="rgba(255,255,255,0.4)"/>
+      </svg>
+      <!-- Label -->
+      <div style="position: absolute; top: 115px; left: 50%; transform: translateX(-10%); background: rgba(30,30,50,0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 14px; white-space: nowrap; backdrop-filter: blur(8px);">
+        <div style="color: #fff; font-size: 11px; font-weight: 600;">AI Translate</div>
+        <div style="color: rgba(255,255,255,0.4); font-size: 10px; margin-top: 2px;">Ctrl+Enter</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Solid Lines + Glass Labels</h3>
+      <p>Solid connecting lines with frosted glass label cards. More prominent, higher contrast. Technical feel.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 32px; background: #1a1a2e; position: relative; min-height: 200px;">
+      <!-- Simulated button with ring -->
+      <div style="position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 32px; height: 32px; border-radius: 6px; background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.3); display: flex; align-items: center; justify-content: center; color: #d4af37; font-size: 14px; box-shadow: 0 0 0 3px rgba(212,175,55,0.25), 0 0 12px rgba(212,175,55,0.15);">⚡</div>
+      <!-- No line, label floats nearby -->
+      <div style="position: absolute; top: 82px; left: 50%; transform: translateX(-50%); background: #d4af37; border-radius: 6px; padding: 6px 12px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+        <div style="color: #1a1a2e; font-size: 11px; font-weight: 700;">AI Translate</div>
+        <div style="color: rgba(26,26,46,0.6); font-size: 10px; margin-top: 1px;">Ctrl+Enter</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Glow Ring + Floating Label</h3>
+      <p>No connecting line. Button gets a glowing ring highlight and a bold floating label appears right below it. Cleaner but less clear when labels are far from buttons.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 20px;">💡 <strong>Recommendation: A (Dashed Leader Lines)</strong> — most readable when annotations are spread across the screen at varying distances. The dashed lines feel informational, not intrusive.</p>

@@ -1,0 +1,4 @@
+{"type":"server-started","port":65287,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:65287","screen_dir":"/Users/it1/GitHub/translation/.superpowers/brainstorm/10144-1774910791/content","state_dir":"/Users/it1/GitHub/translation/.superpowers/brainstorm/10144-1774910791/state"}
+{"type":"screen-added","file":"/Users/it1/GitHub/translation/.superpowers/brainstorm/10144-1774910791/content/editor-improvements.html"}
+{"type":"screen-added","file":"/Users/it1/GitHub/translation/.superpowers/brainstorm/10144-1774910791/content/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}

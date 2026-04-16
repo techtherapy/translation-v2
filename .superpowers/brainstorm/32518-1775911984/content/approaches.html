@@ -1,0 +1,53 @@
+<h2>Three Approaches to Autonomous Translation</h2>
+<p class="subtitle">Same vision, different architectures for how the AI pipeline and human review interact</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>The Assembly Line</h3>
+      <p><strong>Metaphor:</strong> Factory with quality checkpoints</p>
+      <p>Books flow through a linear pipeline: <strong>Import → AI Translate → Confidence Score → Auto-approve (high confidence) → Flag for review (low confidence) → Human review → Publish</strong></p>
+      <p>The AI translates chapter by chapter. Each segment gets a confidence score. High-confidence segments are auto-approved. Low-confidence segments land in a review queue. Reviewers work through the queue, not through whole books.</p>
+      <p style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+        <strong>Pros:</strong> Maximum throughput. Reviewers only see what needs attention. Easy to measure (% auto-approved, queue depth).<br>
+        <strong>Cons:</strong> Loses the "reading experience" — reviewers see fragments, not flowing prose. Risk of coherence issues across auto-approved segments that were individually fine but collectively drift.
+      </p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>The Editor's Desk</h3>
+      <p><strong>Metaphor:</strong> Publishing house manuscript review</p>
+      <p>The AI produces <strong>complete book drafts</strong>. A senior reviewer reads the translation as a <em>reader</em> — flowing text, not segments. AI annotations appear as margin notes: uncertain passages highlighted, alternative renderings offered, doctrinal flags raised.</p>
+      <p>The reviewer reads, marks issues at a high level ("this section feels wrong", "rephrase this concept"), and the AI revises. Multiple pass cycle until the reviewer approves.</p>
+      <p style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+        <strong>Pros:</strong> Preserves reading flow. Catches coherence issues. Natural for senior reviewers. Feels like editing a manuscript, not grading an exam.<br>
+        <strong>Cons:</strong> Slower per-book — reviewer reads everything even if 90% is fine. Harder to parallelize across the team.
+      </p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>The Hybrid — Tiered Review</h3>
+      <p><strong>Metaphor:</strong> Assembly line feeds the editor's desk</p>
+      <p>Combines A and B with a <strong>two-tier system</strong>:</p>
+      <p><strong>Tier 1 (automated):</strong> AI translates entire books. Confidence scoring auto-approves routine passages. Flags exceptions into a fast review queue for quick fixes.</p>
+      <p><strong>Tier 2 (manuscript review):</strong> After Tier 1 clears, a senior reviewer reads the complete draft — but now with 90% already validated, they're reading for <em>flow, voice, and doctrinal coherence</em> rather than catching basic errors.</p>
+      <p>The reviewer's corrections at both tiers feed back into the AI's knowledge base.</p>
+      <p style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+        <strong>Pros:</strong> Best of both worlds — speed of the pipeline plus coherence of manuscript review. Tier 1 handles volume, Tier 2 ensures quality. Feedback loops from both tiers.<br>
+        <strong>Cons:</strong> Most complex to build. Two distinct interfaces needed. Requires clear criteria for what Tier 1 auto-approves vs. flags.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px; padding: 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+  <h3 style="margin-top: 0;">My Recommendation: C — The Hybrid</h3>
+  <p>For 300+ books across multiple languages, you need the throughput of the assembly line. But for Buddhist texts where doctrinal precision and voice matter, you also need the manuscript-level coherence check. The hybrid gives you both — and the two tiers naturally map to different team roles (junior reviewers on Tier 1 queue, senior reviewers on Tier 2 manuscripts).</p>
+</div>

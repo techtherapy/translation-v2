@@ -1,0 +1,14 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-08-track-changes-migration.md",
+  "tasks": [
+    { "id": 0, "subject": "Task 0: Install plugin + ProseMirror dedup", "status": "pending" },
+    { "id": 1, "subject": "Task 1: Create TipTap TrackChanges extension", "status": "pending", "blockedBy": [0] },
+    { "id": 2, "subject": "Task 2: Add content_format to backend + frontend types", "status": "pending" },
+    { "id": 3, "subject": "Task 3: Integrate TrackChanges into SegmentEditor", "status": "pending", "blockedBy": [1, 2] },
+    { "id": 4, "subject": "Task 4: Update save flow for content_format", "status": "pending", "blockedBy": [3] },
+    { "id": 5, "subject": "Task 5: Adapt SegmentAnnotationMargin to ChangeSet", "status": "pending", "blockedBy": [3] },
+    { "id": 6, "subject": "Task 6: Simplify useTrackChanges hook", "status": "pending", "blockedBy": [4] },
+    { "id": 7, "subject": "Task 7: Remove old decoration code + cleanup", "status": "pending", "blockedBy": [5, 6] }
+  ],
+  "lastUpdated": "2026-04-08T00:00:00Z"
+}

@@ -1,0 +1,168 @@
+<h2>Editor Improvements — Three Features</h2>
+<p class="subtitle">Closing the gap with Word for reviewers and translators</p>
+
+<div class="section">
+  <h3>1. Segment Comments</h3>
+  <p class="subtitle">Google Docs-style comment threads per segment</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Segment Row — with comment indicator</div>
+    <div class="mockup-body" style="font-family: system-ui; font-size: 13px;">
+      <!-- Segment row mockup -->
+      <div style="display: flex; gap: 16px; padding: 12px; border-left: 3px solid #3b82f6; background: #fafaf8;">
+        <div style="flex: 1; padding: 8px; background: #f5f0e8; border-radius: 6px;">
+          <div style="font-size: 10px; color: #8a7a6a; margin-bottom: 4px;">Source (Chinese)</div>
+          <div style="color: #2a2420;">蓮生活佛教導弟子們修持四加行法。</div>
+        </div>
+        <div style="flex: 1; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e5e0d5;">
+          <div style="font-size: 10px; color: #8a7a6a; margin-bottom: 4px;">Translation (English)</div>
+          <div style="color: #2a2420;">Living Buddha Lian Sheng taught his disciples the Four Preliminary Practices.</div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+            <span style="background: #dbeafe; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 500;">under_review</span>
+          </div>
+        </div>
+        <!-- Comment badge -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 4px;">
+          <div style="position: relative; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c59a2e" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span style="position: absolute; top: -4px; right: -6px; background: #ef4444; color: white; font-size: 9px; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comment thread (expanded) -->
+      <div style="margin-left: 52%; margin-top: -4px; background: #fffbeb; border: 1px solid #f5e6b8; border-radius: 0 0 8px 8px; padding: 10px; max-width: 420px;">
+        <!-- Comment 1 -->
+        <div style="margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+            <span style="background: #7c3aed; color: white; font-size: 9px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">R</span>
+            <span style="font-size: 11px; font-weight: 600; color: #2a2420;">Reviewer Alice</span>
+            <span style="font-size: 10px; color: #8a7a6a;">2h ago</span>
+          </div>
+          <p style="font-size: 12px; color: #3a3430; margin: 0 0 0 24px; line-height: 1.4;">"Four Preliminary Practices" — should this be "Four Foundational Practices" per our glossary? Check the TBS term.</p>
+        </div>
+        <!-- Comment 2 (reply) -->
+        <div style="margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+            <span style="background: #2563eb; color: white; font-size: 9px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">T</span>
+            <span style="font-size: 11px; font-weight: 600; color: #2a2420;">Translator Bob</span>
+            <span style="font-size: 10px; color: #8a7a6a;">1h ago</span>
+          </div>
+          <p style="font-size: 12px; color: #3a3430; margin: 0 0 0 24px; line-height: 1.4;">You're right, updated. The glossary says "Foundational" is preferred.</p>
+        </div>
+        <!-- Resolve button -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 6px; border-top: 1px solid #f0e4c8;">
+          <div style="display: flex; gap: 4px;">
+            <input style="flex: 1; font-size: 11px; padding: 4px 8px; border: 1px solid #e5e0d5; border-radius: 4px; background: white; width: 220px;" placeholder="Reply..." />
+            <button style="font-size: 10px; padding: 4px 8px; background: #c59a2e; color: white; border: none; border-radius: 4px; cursor: pointer;">Reply</button>
+          </div>
+          <button style="font-size: 10px; padding: 4px 8px; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 3px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Resolve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. Track Changes — Persistent & Synced</h3>
+  <p class="subtitle">Current track changes work well visually. The fix is persistence, not UI.</p>
+
+  <div class="mockup">
+    <div class="mockup-header">What changes (backend, not UI)</div>
+    <div class="mockup-body" style="font-family: system-ui; font-size: 13px; padding: 16px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <tr style="border-bottom: 2px solid #e5e0d5;">
+          <th style="text-align: left; padding: 6px 8px; color: #8a7a6a; font-weight: 600;">Current (fragile)</th>
+          <th style="text-align: left; padding: 6px 8px; color: #8a7a6a; font-weight: 600;">After (persistent)</th>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0ebe0;">
+          <td style="padding: 8px; color: #ef4444;">TC mode stored in localStorage</td>
+          <td style="padding: 8px; color: #15803d;">TC mode synced to DB via BookTranslation.track_changes field (already exists! just not synced)</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0ebe0;">
+          <td style="padding: 8px; color: #ef4444;">previous_text derived from latest TranslationVersion — only shows diff from one version back</td>
+          <td style="padding: 8px; color: #15803d;">Add <code>previous_text</code> column to Translation table — explicit baseline, set when track changes is enabled</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0ebe0;">
+          <td style="padding: 8px; color: #ef4444;">Optimistic previous_text in React state can desync</td>
+          <td style="padding: 8px; color: #15803d;">Backend returns previous_text authoritatively — frontend just renders</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0ebe0;">
+          <td style="padding: 8px; color: #ef4444;">resolve_track_changes has a bug: accept and reject write same version</td>
+          <td style="padding: 8px; color: #15803d;">Fix: accept clears previous_text, reject reverts text AND clears previous_text</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px; color: #ef4444;">Enabling TC doesn't snapshot current state</td>
+          <td style="padding: 8px; color: #15803d;">When TC toggled on: snapshot all current translated_text into previous_text as baseline</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Formatting Toolbar</h3>
+  <p class="subtitle">Minimal toolbar: Bold + Italic, shown when editing</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Segment Editor — with formatting toolbar</div>
+    <div class="mockup-body" style="font-family: system-ui; font-size: 13px;">
+      <div style="border: 2px solid #c59a2e; border-radius: 8px; overflow: hidden;">
+        <!-- Toolbar -->
+        <div style="display: flex; align-items: center; gap: 2px; padding: 4px 8px; background: #faf8f3; border-bottom: 1px solid #e5e0d5;">
+          <button style="width: 28px; height: 26px; border: none; background: #ede8dc; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 13px; color: #2a2420; font-family: serif;">B</button>
+          <button style="width: 28px; height: 26px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-style: italic; font-size: 13px; color: #6a6460; font-family: serif;">I</button>
+          <div style="width: 1px; height: 16px; background: #e5e0d5; margin: 0 4px;"></div>
+          <button style="width: 28px; height: 26px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-size: 13px; color: #6a6460;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h18M3 6h18"/><path d="M3 14h18M3 18h18" opacity="0.3"/></svg>
+          </button>
+          <button style="width: 28px; height: 26px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-size: 13px; color: #6a6460;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M15 14l5-5-5-5" opacity="0.3"/></svg>
+          </button>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; color: #8a7a6a;">Ctrl+B / Ctrl+I</span>
+        </div>
+        <!-- Editor area -->
+        <div style="padding: 12px; min-height: 60px; background: white;">
+          <div style="color: #2a2420; font-size: 13px; line-height: 1.6;">Living Buddha <strong>Lian Sheng</strong> taught his disciples the Four Foundational Practices.</div>
+        </div>
+        <!-- Status bar -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: #faf8f3; border-top: 1px solid #e5e0d5;">
+          <span style="font-size: 10px; color: #15803d; display: flex; align-items: center; gap: 3px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Saved
+          </span>
+          <span style="font-size: 10px; color: #8a7a6a;">12 words &middot; 78 chars</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Filter Integration</h3>
+  <p class="subtitle">New filter chip to find segments with unresolved comments</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Filter bar — with "Has Comments" chip</div>
+    <div class="mockup-body" style="font-family: system-ui; font-size: 12px;">
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; padding: 8px;">
+        <span style="padding: 3px 10px; border-radius: 12px; background: #f5f0e8; color: #6a6460; cursor: pointer;">All (142)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #f5f0e8; color: #6a6460; cursor: pointer;">Empty (23)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #f3e8ff; color: #7c3aed; cursor: pointer;">AI (45)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #fef3c7; color: #b45309; cursor: pointer;">Draft (30)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #dbeafe; color: #2563eb; cursor: pointer;">Review (20)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #dcfce7; color: #15803d; cursor: pointer;">Approved (22)</span>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #fee2e2; color: #dc2626; cursor: pointer;">Revision (2)</span>
+        <div style="width: 1px; height: 20px; background: #e5e0d5; align-self: center;"></div>
+        <span style="padding: 3px 10px; border-radius: 12px; background: #c59a2e; color: white; cursor: pointer; font-weight: 500;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align: -1px; margin-right: 2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          Comments (5)
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

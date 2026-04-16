@@ -1,0 +1,54 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-04-track-changes-review.md",
+  "tasks": [
+    {
+      "id": 7,
+      "subject": "Task 1: Extract Hunk Utilities from DiffReviewView",
+      "status": "completed",
+      "lastUpdated": "2026-04-04T14:00:00Z"
+    },
+    {
+      "id": 8,
+      "subject": "Task 2: Replace Toolbar Controls (Track Toggle + Display Dropdown)",
+      "status": "completed",
+      "blockedBy": [7],
+      "lastUpdated": "2026-04-04T14:10:00Z"
+    },
+    {
+      "id": 9,
+      "subject": "Task 3: Add Original Display Mode",
+      "status": "completed",
+      "blockedBy": [8],
+      "lastUpdated": "2026-04-04T14:20:00Z"
+    },
+    {
+      "id": 10,
+      "subject": "Task 4: Build ChangeCard Component",
+      "status": "completed",
+      "blockedBy": [7],
+      "lastUpdated": "2026-04-04T14:30:00Z"
+    },
+    {
+      "id": 11,
+      "subject": "Task 5: Build ChangesPanel Component",
+      "status": "completed",
+      "blockedBy": [10],
+      "lastUpdated": "2026-04-04T14:40:00Z"
+    },
+    {
+      "id": 12,
+      "subject": "Task 6: Integrate ChangesPanel into TranslationEditor",
+      "status": "completed",
+      "blockedBy": [8, 9, 11],
+      "lastUpdated": "2026-04-04T14:50:00Z"
+    },
+    {
+      "id": 13,
+      "subject": "Task 7: Update Release Notes",
+      "status": "completed",
+      "blockedBy": [12],
+      "lastUpdated": "2026-04-04T15:00:00Z"
+    }
+  ],
+  "lastUpdated": "2026-04-04T15:00:00Z"
+}

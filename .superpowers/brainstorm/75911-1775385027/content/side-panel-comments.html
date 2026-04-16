@@ -1,0 +1,70 @@
+<h2>Side Panel Comments — Layout Options</h2>
+<p class="subtitle">How should a comment panel integrate with the existing 3-column editor?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>4th Column — Always Visible</h3>
+      <p>Add a dedicated comment column to the right of the translation column. Comments are vertically anchored to their segment. Always visible when toggled on.</p>
+      <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 12px; font-family: monospace; line-height: 1.8;">
+        <span style="color:#888;">┌──────┬────────────┬────────────┬───────────┐</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Source</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Translation</span> <span style="color:#888;">│</span> <span style="color:#fbbf24;">Comments</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#7dd3fc;">佛陀說法...</span> <span style="color:#888;">│</span> <span style="color:#86efac;">The Buddha</span> <span style="color:#888;">│</span> <span style="color:#fbbf24;">💬 "three</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#86efac;">taught...</span> <span style="color:#888;">│</span> <span style="color:#fbbf24;">hundred"→</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#fbbf24;">assemblies</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">├──────┼────────────┼────────────┼───────────┤</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Next seg</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Next seg</span> <span style="color:#888;">│</span> <span style="color:#666;">(empty)</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">└──────┴────────────┴────────────┴───────────┘</span>
+      </div>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>All comments visible at once</li><li>Closest to Google Docs UX</li><li>Easy to scan for unresolved items</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Reduces width of source + translation columns</li><li>May feel cramped on smaller screens</li><li>Empty space for segments without comments</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Slide-Out Panel — On Demand</h3>
+      <p>A panel slides in from the right when you click a comment indicator or the comment button. Overlays or pushes the content. Can be dismissed.</p>
+      <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 12px; font-family: monospace; line-height: 1.8;">
+        <span style="color:#888;">┌──────┬────────────┬────────────┐┌──────────┐</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Source</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Translation</span> <span style="color:#888;">││</span> <span style="color:#fbbf24;">Comments</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#86efac;">The <span style="background:rgba(251,191,36,0.3);">Buddha</span></span> <span style="color:#888;">││</span> <span style="color:#fbbf24;">━━━━━━━━</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#86efac;">taught...</span> <span style="color:#888;">││</span> <span style="color:#fbbf24;">💬 Rev..</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">││</span> <span style="color:#fbbf24;">Reply..</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">├──────┼────────────┼────────────┤│</span> &nbsp; <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Next seg</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Next seg</span> <span style="color:#888;">│└──────────┘</span><br>
+        <span style="color:#888;">└──────┴────────────┴────────────┘</span>
+      </div>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Full editor width when not reviewing</li><li>Focused — shows one segment's comments</li><li>Familiar slide-out pattern</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Can only see one segment's comments at a time</li><li>Extra click to open/close</li><li>Overlays may obscure content</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Margin Annotations — Compact Indicators</h3>
+      <p>Small comment indicators (avatars or icons) appear in the right margin of the translation column, aligned to the highlighted text. Click to expand inline.</p>
+      <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 12px; font-family: monospace; line-height: 1.8;">
+        <span style="color:#888;">┌──────┬────────────┬─────────────────────┐</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Source</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Translation</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#7dd3fc;">佛陀說法...</span> <span style="color:#888;">│</span> <span style="color:#86efac;">The Buddha taught..</span> <span style="color:#fbbf24;">🔵</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#86efac;">over <span style="background:rgba(251,191,36,0.3);">three hundred</span></span> <span style="color:#fbbf24;">🔵</span> <span style="color:#888;">│</span><br>
+        <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> &nbsp; <span style="color:#888;">│</span> <span style="color:#86efac;"><span style="background:rgba(251,191,36,0.3);">teachings</span>, and...</span> &nbsp;&nbsp; <span style="color:#888;">│</span><br>
+        <span style="color:#888;">├──────┼────────────┼─────────────────────┤</span><br>
+        <span style="color:#888;">│</span> <span style="color:#666;">☐</span> <span style="color:#888;">│</span> <span style="color:#7dd3fc;">Next seg</span> <span style="color:#888;">│</span> <span style="color:#86efac;">Next translation</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888;">│</span><br>
+        <span style="color:#888;">└──────┴────────────┴─────────────────────┘</span>
+      </div>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>No layout changes — fits current grid</li><li>Minimal visual noise</li><li>Combines well with inline highlights</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Less space for comment content</li><li>Still need expand-on-click for full thread</li><li>Harder to scan across segments</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

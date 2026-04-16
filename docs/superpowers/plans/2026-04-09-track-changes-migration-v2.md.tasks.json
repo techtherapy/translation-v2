@@ -1,0 +1,16 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-09-track-changes-migration-v2.md",
+  "tasks": [
+    { "id": 0, "subject": "Task 0: Plugin Validation Spike", "status": "pending" },
+    { "id": 1, "subject": "Task 1: Content Format Utilities", "status": "pending", "blockedBy": [0] },
+    { "id": 2, "subject": "Task 2: Backend content_format column + API", "status": "pending" },
+    { "id": 3, "subject": "Task 3: Create TipTap TrackChanges Extension", "status": "pending", "blockedBy": [0] },
+    { "id": 4, "subject": "Task 4: Integrate Extension into SegmentEditor", "status": "pending", "blockedBy": [1, 2, 3] },
+    { "id": 5, "subject": "Task 5: Update Save Flow + Immediate Save", "status": "pending", "blockedBy": [4] },
+    { "id": 6, "subject": "Task 6: Update All Content Consumers", "status": "pending", "blockedBy": [1, 4] },
+    { "id": 7, "subject": "Task 7: Simplify useTrackChanges Hook", "status": "pending", "blockedBy": [5] },
+    { "id": 8, "subject": "Task 8: Remove Old Decoration Code", "status": "pending", "blockedBy": [6, 7] },
+    { "id": 9, "subject": "Task 9: Integration Tests", "status": "pending", "blockedBy": [4] }
+  ],
+  "lastUpdated": "2026-04-09T00:00:00Z"
+}

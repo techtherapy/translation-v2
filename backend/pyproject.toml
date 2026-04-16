@@ -1,0 +1,48 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["app"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort (import ordering)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (modern Python syntax)
+    "B",      # flake8-bugbear (common bugs)
+    "SIM",    # flake8-simplify
+    "ASYNC",  # flake8-async (async best practices)
+    "S",      # flake8-bandit (security)
+    "T20",    # flake8-print (catch debug prints)
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line length handled by formatter
+    "S101",   # allow assert (useful in tests)
+    "S104",   # allow binding to all interfaces (uvicorn)
+    "S106",   # allow hardcoded passwords (default admin seed)
+    "B008",   # allow function calls in default args (FastAPI Depends())
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/core/database.py" = ["S608"]  # allow raw SQL strings (migrations)
+"app/api/glossary.py" = ["S608"]   # allow raw SQL in queries
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

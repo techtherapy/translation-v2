@@ -1,0 +1,54 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-07-editor-stability-refactor.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: Expand diffUtils into Canonical Diff Module",
+      "status": "completed",
+      "description": "**Goal:** Create a single source of truth for all diff computation.\n\n**Files:**\n- Modify: `frontend/src/components/editor/diffUtils.ts`\n- Create: `frontend/src/components/editor/__tests__/diffUtils.test.ts`\n\n```json:metadata\n{\"files\": [\"frontend/src/components/editor/diffUtils.ts\", \"frontend/src/components/editor/__tests__/diffUtils.test.ts\"], \"verifyCommand\": \"cd frontend && npx vitest run src/components/editor/__tests__/diffUtils.test.ts\", \"acceptanceCriteria\": [\"getHunkItems matches SegmentAnnotationMargin inline logic\", \"computeHunkIndices matches InlineDiff inline logic\", \"existing functions unchanged\", \"unit tests with edge cases\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Create EditorContext for Shared State",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** Create React context providing shared editor state to all sub-components.\n\n**Files:**\n- Create: `frontend/src/components/editor/EditorContext.tsx`\n- Create: `frontend/src/components/editor/__tests__/EditorContext.test.tsx`\n- Modify: `frontend/src/components/editor/TranslationEditor.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/components/editor/EditorContext.tsx\", \"frontend/src/components/editor/__tests__/EditorContext.test.tsx\", \"frontend/src/components/editor/TranslationEditor.tsx\"], \"verifyCommand\": \"cd frontend && npx vitest run src/components/editor/__tests__/EditorContext.test.tsx && npx tsc --noEmit\", \"acceptanceCriteria\": [\"EditorContext provides 8 shared values\", \"useEditorContext throws outside provider\", \"TranslationEditor wraps in EditorProvider\", \"DOM manipulation replaced with declarative state\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Extract SegmentRow with React.memo and Stable Callbacks",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** Extract 460-line segment render loop into memoized SegmentRow.\n\n**Files:**\n- Create: `frontend/src/components/editor/SegmentRow.tsx`\n- Create: `frontend/src/components/editor/__tests__/SegmentRow.test.tsx`\n- Modify: `frontend/src/components/editor/TranslationEditor.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/components/editor/SegmentRow.tsx\", \"frontend/src/components/editor/__tests__/SegmentRow.test.tsx\", \"frontend/src/components/editor/TranslationEditor.tsx\"], \"verifyCommand\": \"cd frontend && npx tsc --noEmit && npx vitest run\", \"acceptanceCriteria\": [\"SegmentRow wrapped in React.memo\", \"consumes EditorContext\", \"all callbacks useCallback-wrapped\", \"segment map reduced to ~20 lines\", \"no visual changes\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Extract useTrackChanges Hook",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** Move track changes state and handlers into focused hook.\n\n**Files:**\n- Create: `frontend/src/hooks/useTrackChanges.ts`\n- Create: `frontend/src/hooks/__tests__/useTrackChanges.test.ts`\n- Modify: `frontend/src/components/editor/TranslationEditor.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/hooks/useTrackChanges.ts\", \"frontend/src/hooks/__tests__/useTrackChanges.test.ts\", \"frontend/src/components/editor/TranslationEditor.tsx\"], \"verifyCommand\": \"cd frontend && npx vitest run src/hooks/__tests__/useTrackChanges.test.ts && npx tsc --noEmit\", \"acceptanceCriteria\": [\"manages trackingEnabled, displayMode, activeHunkIdx\", \"exposes toggle, cycle, accept, reject handlers\", \"TranslationEditor uses hook\", \"identical behavior\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Extract useEditorComments Hook",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** Move comment state and handlers into focused hook.\n\n**Files:**\n- Create: `frontend/src/hooks/useEditorComments.ts`\n- Create: `frontend/src/hooks/__tests__/useEditorComments.test.ts`\n- Modify: `frontend/src/components/editor/TranslationEditor.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/hooks/useEditorComments.ts\", \"frontend/src/hooks/__tests__/useEditorComments.test.ts\", \"frontend/src/components/editor/TranslationEditor.tsx\"], \"verifyCommand\": \"cd frontend && npx vitest run src/hooks/__tests__/useEditorComments.test.ts && npx tsc --noEmit\", \"acceptanceCriteria\": [\"manages 6 comment-related state variables\", \"stable useCallback-wrapped callbacks\", \"TranslationEditor uses hook\", \"identical behavior\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Migrate Diff Consumers to Canonical diffUtils",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** Replace 3 independent DiffMatchPatch computations with shared diffUtils.\n\n**Files:**\n- Modify: `frontend/src/components/editor/SegmentAnnotationMargin.tsx`\n- Modify: `frontend/src/components/editor/InlineDiff.tsx`\n- Modify: `frontend/src/components/editor/ChangesPanel.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/components/editor/SegmentAnnotationMargin.tsx\", \"frontend/src/components/editor/InlineDiff.tsx\", \"frontend/src/components/editor/ChangesPanel.tsx\"], \"verifyCommand\": \"cd frontend && npx tsc --noEmit && npx vitest run\", \"acceptanceCriteria\": [\"3 files use diffUtils instead of inline DiffMatchPatch\", \"no DiffMatchPatch import in 3 consumer files\", \"hunk indices identical\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: Extract TranslationDisplay Component",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** Encapsulate 3-way display mode branching into dedicated component.\n\n**Files:**\n- Create: `frontend/src/components/editor/TranslationDisplay.tsx`\n- Modify: `frontend/src/components/editor/SegmentRow.tsx`\n\n```json:metadata\n{\"files\": [\"frontend/src/components/editor/TranslationDisplay.tsx\", \"frontend/src/components/editor/SegmentRow.tsx\"], \"verifyCommand\": \"cd frontend && npx tsc --noEmit && npx vitest run\", \"acceptanceCriteria\": [\"renders correct view per display mode\", \"editing renders children\", \"accept/reject buttons appear correctly\", \"SegmentRow simplified\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-07T00:00:00Z"
+}

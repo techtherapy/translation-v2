@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 200 110' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M90 14C86 38,88 58,100 90C94 58,90 38,90 14Z' fill='%23C8956C' opacity='.9'/%3E%3Cpath d='M110 14C114 38,112 58,100 90C106 58,110 38,110 14Z' fill='%23C8956C' opacity='.9'/%3E%3Cpath d='M68 26C62 48,68 66,98 92C80 66,70 48,68 26Z' fill='%23C8956C' opacity='.72'/%3E%3Cpath d='M132 26C138 48,132 66,102 92C120 66,130 48,132 26Z' fill='%23C8956C' opacity='.72'/%3E%3Cpath d='M48 42C38 58,46 74,96 94C62 76,48 60,48 42Z' fill='%23C8956C' opacity='.5'/%3E%3Cpath d='M152 42C162 58,154 74,104 94C138 76,152 60,152 42Z' fill='%23C8956C' opacity='.5'/%3E%3Cpath d='M30 56C20 70,30 82,94 98C52 82,32 70,30 56Z' fill='%23C8956C' opacity='.32'/%3E%3Cpath d='M170 56C180 70,170 82,106 98C148 82,168 70,170 56Z' fill='%23C8956C' opacity='.32'/%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BITS — Buddha Intelligence Translation System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=LXGW+WenKai:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        var theme = localStorage.getItem('theme');
+        var isDark = theme !== 'light';
+        if (isDark) document.documentElement.classList.add('dark');
+        var fs = localStorage.getItem('fontSize');
+        if (fs && fs !== '16') document.documentElement.style.fontSize = fs + 'px';
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
