@@ -11,6 +11,7 @@ from app.api.settings import router as settings_router
 from app.api.qa import router as qa_router
 from app.api.book_translations import router as book_translations_router
 from app.api.comments import router as comments_router
+from app.api.knowledge import router as knowledge_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -25,3 +26,4 @@ api_router.include_router(tm_router, prefix="/tm", tags=["translation-memory"])
 api_router.include_router(settings_router, prefix="/settings", tags=["settings"])
 api_router.include_router(qa_router, prefix="/qa", tags=["qa"])
 api_router.include_router(comments_router, prefix="/comments", tags=["comments"])
+api_router.include_router(knowledge_router, prefix="/knowledge")

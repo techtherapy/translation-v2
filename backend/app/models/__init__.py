@@ -10,6 +10,7 @@ from app.models.setting import Setting
 from app.models.book_translation import BookTranslation
 from app.models.segment_comment import SegmentComment
 from app.models.comment_reaction import CommentReaction
+from app.models.knowledge import ContentType, StyleRule, GoldenExample
 
 __all__ = [
     "User",
@@ -28,4 +29,7 @@ __all__ = [
     "BookTranslation",
     "SegmentComment",
     "CommentReaction",
+    "ContentType",
+    "StyleRule",
+    "GoldenExample",
 ]

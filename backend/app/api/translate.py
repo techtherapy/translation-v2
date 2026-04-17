@@ -29,6 +29,9 @@ from app.services.translation.prompts import (
     build_pivot_system_prompt, build_pivot_translation_prompt,
 )
 from app.services.translation.llm import translate_text
+from app.services.translation.knowledge_retrieval import (
+    fetch_matching_golden_examples, fetch_matching_style_rules,
+)
 from app.services.glossary.term_detection import detect_terms_in_text, detect_terms_for_pivot
 
 router = APIRouter()
@@ -146,6 +149,14 @@ async def _build_prompts(
     book_source_lang = await db.get(Language, book.source_language_id) if book.source_language_id else None
     book_source_lang_name = book_source_lang.name if book_source_lang else "Chinese"
 
+    # Phase 1 knowledge-base injection — fetch matching StyleRule and
+    # GoldenExample rows for the target language. Content type scoping is not
+    # yet wired (requires ContentTypeAssignment per spec Appendix A); for now,
+    # only content-type-agnostic rules/examples match, which is the correct
+    # conservative default until chapter-level content types are authored.
+    style_rules = await fetch_matching_style_rules(db, language_id=language.id)
+    golden_examples = await fetch_matching_golden_examples(db, language_id=language.id)
+
     if source_language_id:
         # Pivot translation mode
         pivot_translation, source_language = await _resolve_pivot(
@@ -170,6 +181,7 @@ async def _build_prompts(
             glossary_terms=glossary_terms,
             custom_instructions=custom_instructions,
             original_language=book_source_lang_name,
+            style_rules=style_rules,
         )
         user_prompt = build_pivot_translation_prompt(
             pivot_text=pivot_translation.translated_text,
@@ -180,6 +192,7 @@ async def _build_prompts(
             context_after=context_after,
             extra_instructions=extra_instructions,
             original_language=book_source_lang_name,
+            golden_examples=golden_examples,
         )
         return system_prompt, user_prompt, pivot_translation
     else:
@@ -193,6 +206,7 @@ async def _build_prompts(
             glossary_terms=glossary_terms,
             custom_instructions=custom_instructions,
             source_language=book_source_lang_name,
+            style_rules=style_rules,
         )
         user_prompt = build_translation_prompt(
             source_text=segment.source_text,
@@ -201,6 +215,7 @@ async def _build_prompts(
             context_after=context_after,
             extra_instructions=extra_instructions,
             source_language=book_source_lang_name,
+            golden_examples=golden_examples,
         )
         return system_prompt, user_prompt, None
 
