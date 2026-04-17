@@ -138,7 +138,7 @@ cd frontend && npm run format:check # Prettier check
 ```
 
 - **Frontend tests**: Vitest + jsdom + @testing-library/react. ~180 tests across 13 files.
-- **Backend tests**: None yet (no pytest configured)
+- **Backend tests**: pytest + pytest-asyncio + httpx + aiosqlite. 32 tests across `tests/test_health.py`, `tests/test_auth.py`, `tests/test_glossary.py`, `tests/test_security.py`, `tests/test_permissions.py`. Run with `cd backend && .venv/bin/python -m pytest tests/`. Uses in-memory SQLite (`sqlite+aiosqlite:///:memory:`) with `Base.metadata.create_all` per-test via `db_engine` fixture in `tests/conftest.py`. Dev deps in `backend/requirements-dev.txt`.
 - **CI/CD**: None — deploys are triggered by git push (Railway auto-deploy, Vercel auto-deploy)
 - **Pre-commit hook**: Runs `tsc --noEmit` before each commit
 
@@ -224,7 +224,7 @@ See `GLOSSARY_IMPROVEMENTS_PLAN.md` for detailed glossary phase documentation.
 
 ## Gotchas
 
-- **No Alembic** — `alembic` is in `requirements.txt` but not configured (no `alembic.ini` or `alembic/` directory). All schema migrations are manual raw SQL in `core/database.py` `_run_migrations()`. New columns must be added there.
+- **Alembic is the authoritative migration path as of 2026-04-17.** `backend/alembic/` is wired up (env.py reads app config, async-aware, initial baseline revision `008866999d3c`). `_run_migrations()` in `core/database.py` is **frozen** — do not add new schema changes there. All new schema changes go through `alembic revision --autogenerate -m "..."`. Existing deploys are automatically baseline-stamped on first startup via `_ensure_alembic_baseline()`. See `backend/alembic/README.md` for the full workflow.
 - **Route registration order** — FastAPI matches routes top-to-bottom. In `api/glossary.py`, static paths (`/autocomplete`, `/ai-batch`, `/import/csv`) must come before `/{term_id}` or they'll be swallowed by the path parameter.
 - **Empty service stubs** — `services/qa/`, `services/pipeline/`, `services/import_export/`, `services/ai_assistants/` are empty placeholder packages. Don't try to import from them.
 - **DB URL auto-fix** — `core/database.py` auto-converts `postgresql://` and `postgres://` to `postgresql+asyncpg://` for Railway compatibility.

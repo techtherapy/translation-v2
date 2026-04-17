@@ -62,11 +62,73 @@ async def init_db(retries: int = 5, delay: float = 2.0):
                 logger.error("DB init failed after %d attempts: %s", retries, exc)
                 raise
 
-    # Run migrations separately — don't block startup if they fail
+    # Legacy migrations (frozen — see policy note on _run_migrations).
+    # Existing deploys rely on these having already been applied; they are
+    # idempotent so re-running them is safe.
     try:
         await _run_migrations()
     except Exception as exc:
         logger.error("Migrations failed (app will continue): %s", exc)
+
+    # Alembic ownership: ensure alembic_version table exists and is stamped
+    # at HEAD so future migrations can layer on top. For existing databases
+    # this is a no-op after the first successful run.
+    try:
+        await _ensure_alembic_baseline()
+    except Exception as exc:
+        logger.error("Alembic baseline stamp failed (app will continue): %s", exc)
+
+
+async def _ensure_alembic_baseline():
+    """Idempotently create and stamp alembic_version to the HEAD revision.
+
+    Existing deploys never ran `alembic stamp head` manually — this does the
+    equivalent on first startup, so going forward `alembic upgrade head` works
+    against real infrastructure. Does nothing if alembic_version already holds
+    a revision.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    # Resolve alembic.ini relative to this file: backend/app/core/database.py → backend/alembic.ini
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    ini_path = os.path.abspath(os.path.join(here, "..", "..", "alembic.ini"))
+    if not os.path.exists(ini_path):
+        logger.info("alembic.ini not found at %s — skipping baseline stamp", ini_path)
+        return
+
+    alembic_cfg = Config(ini_path)
+    alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(ini_path), "alembic"))
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head_revision = script.get_current_head()
+    if head_revision is None:
+        logger.info("Alembic has no revisions yet — skipping baseline stamp")
+        return
+
+    async with engine.begin() as conn:
+        # Check if alembic_version exists
+        exists = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version'"
+        ))
+        if exists.fetchone():
+            current = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+            row = current.fetchone()
+            if row:
+                logger.info("Alembic already at revision %s", row[0])
+                return
+            # Table exists but empty — insert head
+            await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:v)"), {"v": head_revision})
+            logger.info("Alembic stamped: inserted HEAD %s into empty alembic_version", head_revision)
+            return
+
+        # Create the table and stamp HEAD
+        await conn.execute(text(
+            "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL, "
+            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+        ))
+        await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:v)"), {"v": head_revision})
+        logger.info("Alembic stamped: created alembic_version and inserted HEAD %s", head_revision)
 
 
 async def _safe_execute(label: str, coro):
@@ -92,7 +154,20 @@ async def _add_column_if_missing(table: str, column: str, col_def: str):
 
 
 async def _run_migrations():
-    """Apply schema changes that create_all doesn't handle on existing tables.
+    """FROZEN. Apply schema changes that create_all doesn't handle on existing tables.
+
+    ⚠️ DO NOT ADD NEW MIGRATIONS HERE. As of 2026-04-17, all schema changes go
+    through Alembic (see backend/alembic/README.md). This function remains only
+    to keep existing deploys idempotently healthy; every step below is already
+    applied in production. New columns, tables, indexes, enum conversions, or
+    data backfills MUST be added as an Alembic revision:
+
+        cd backend && alembic revision --autogenerate -m "short description"
+
+    Rationale: each step here is wrapped in _safe_execute, which logs and
+    continues on failure — a silent-failure pattern that is acceptable for
+    idempotent legacy migrations but unacceptable as a primary migration
+    strategy.
 
     Each step runs in its own transaction so one failure doesn't block others.
     """
