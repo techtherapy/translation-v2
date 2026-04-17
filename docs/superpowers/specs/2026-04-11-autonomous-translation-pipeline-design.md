@@ -261,25 +261,39 @@ Each phase should be evaluated honestly. The system earns expansion by demonstra
 
 ### A. Data Model Additions
 
+**Versioning convention.** Every knowledge entity (`StyleRule`, `GoldenExample`,
+`CorrectionPattern`, `ContentType`, and glossary entries) carries a monotonically
+increasing `revision` column that is incremented on every meaningful edit. This
+enables the `evidence_snapshot` (see `PipelineSegmentResult` below) to capture
+the exact version of each input that shaped a given translation, which is what
+Principle 3.4 (evidentiary transparency) actually requires. Storing the name or
+ID of a rule is not sufficient — the rule's content can change after the
+translation is recorded, and the audit trail must be reconstructible
+retrospectively.
+
 ```
 StyleRule:
   id, content (natural language rule text), category (enum: terminology|style|doctrine|formatting),
   content_type_id (FK, nullable — null means "all"), language_id (FK, nullable — null means "all"),
-  priority (int), is_active (bool), created_by, created_at, updated_at
+  priority (int), is_active (bool), revision (int, incremented on every content edit),
+  created_by, created_at, updated_at
 
 GoldenExample:
   id, source_text, translated_text, language_id (FK), content_type_id (FK, nullable),
-  notes (why this is exemplary), nominated_by, confirmed_by, created_at
+  notes (why this is exemplary), revision (int, incremented on every edit to the
+    source/translated/notes fields), nominated_by, confirmed_by, created_at, updated_at
 
 CorrectionPattern:
   id, description (natural language), source_pattern (text to match),
   wrong_translation (what the AI tends to produce), correct_translation (what it should produce),
   context_condition (when this applies, e.g., "in meditation contexts"),
   status (suggested|confirmed|dismissed), detected_count (int),
-  created_by (null if auto-detected), confirmed_by, created_at
+  revision (int, incremented on every edit to pattern/translation fields),
+  created_by (null if auto-detected), confirmed_by, created_at, updated_at
 
 ContentType:
-  id, name, description, is_active, created_by, created_at
+  id, name, description, is_active, revision (int, incremented on every edit),
+  created_by, created_at, updated_at
 
 PipelineRun:
   id, project_id (FK to BookTranslation), language_id (FK),
@@ -294,13 +308,36 @@ PipelineSegmentResult:
   confidence_score (float 0-1), ai_flags (JSON array of {type, description}),
   review_tier (enum: auto_approved|tier_1|tier_2|null),
   qa_results (JSON: {glossary_check, coherence_check, doctrinal_check}),
-  evidence_snapshot (JSON: {glossary_terms_applied, style_rules_applied, golden_examples_used,
-    correction_patterns_applied, context_layers_included, prompt_version,
-    source_spans_salient (array of {start, end, reason} identifying source regions the model
-      was asked to attend to), alternative_candidates (array of alternative translations the
-      model was asked to consider or that were generated during self-assessment),
-    prompt_hash (immutable hash of the assembled prompt for reproducibility)}),
+  evidence_snapshot (JSON: {
+    glossary_terms_applied: array of {id, revision, source_term, translated_term_applied},
+    style_rules_applied: array of {id, revision},
+    golden_examples_used: array of {id, revision},
+    correction_patterns_applied: array of {id, revision},
+    content_type: {id, revision} (nullable),
+    context_layers_included: array of layer identifiers,
+    prompt_version: str (version identifier of the prompt-assembly code path itself),
+    source_spans_salient: array of {start, end, reason} identifying source regions the model
+      was asked to attend to,
+    alternative_candidates: array of alternative translations the model was asked to consider
+      or that were generated during self-assessment,
+    assembled_prompt: str (the full assembled prompt text, or a content-addressable pointer
+      to it in object storage if size-prohibitive),
+    prompt_hash: str (sha256 of assembled_prompt, kept as an integrity check but NOT as a
+      substitute for the versioned inputs above — see versioning convention at the top of
+      this appendix)
+  }),
   tokens_used (int), model_used (str), created_at
+
+Note on reproducibility: `evidence_snapshot` captures versioned identifiers of every
+knowledge input that shaped the translation. Given a `PipelineSegmentResult` row, any
+reader can reconstruct the exact prompt that was sent to the LLM by looking up each
+referenced entity at the recorded `revision`. This satisfies Principle 3.4 as a firmer
+promise than `prompt_hash` alone, which only proves the prompt string was not tampered
+with but cannot be inverted into the rules that produced it. To support historical
+reconstruction, `StyleRule`, `GoldenExample`, `CorrectionPattern`, and `ContentType` rows
+must never be hard-deleted — use `is_active = false` instead. If an entity is genuinely
+erroneous and must be purged (e.g., contains PII), do so via an explicit audit-logged
+operation that also invalidates any `PipelineSegmentResult` rows that reference it.
 
 ContentTypeAssignment:
   id, chapter_id (FK), content_type_id (FK),
