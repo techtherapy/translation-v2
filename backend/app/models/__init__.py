@@ -12,6 +12,17 @@ from app.models.segment_comment import SegmentComment
 from app.models.comment_reaction import CommentReaction
 from app.models.knowledge import ContentType, StyleRule, GoldenExample
 
+from app.models.docs_review import (
+    DocsReviewProject,
+    DocsReviewSnapshot,
+    DocsReviewRun,
+    DocsReviewItem,
+    DocsReviewDecision,
+    DocsReviewLesson,
+    DocsReviewLessonConfirmation,
+    DocsReviewExperiment,
+)
+
 __all__ = [
     "User",
     "Language",
@@ -32,4 +43,12 @@ __all__ = [
     "ContentType",
     "StyleRule",
     "GoldenExample",
+    "DocsReviewProject",
+    "DocsReviewSnapshot",
+    "DocsReviewRun",
+    "DocsReviewItem",
+    "DocsReviewDecision",
+    "DocsReviewLesson",
+    "DocsReviewLessonConfirmation",
+    "DocsReviewExperiment",
 ]

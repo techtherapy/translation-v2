@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"  # comma-separated
 
+    # Google Docs review prototype: opt in explicitly.
+    docs_review_enabled: bool = False
+    docs_review_live_ai: bool = False
+
     # App
     app_name: str = "BITS — Buddha Intelligence Translation System"
     debug: bool = True

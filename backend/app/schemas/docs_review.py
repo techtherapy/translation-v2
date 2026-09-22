@@ -18,9 +18,7 @@ class ReviewSpan(StrictModel):
 
 
 class ReviewFinding(StrictModel):
-    category: Literal[
-        "meaning", "omission", "addition", "terminology", "consistency", "voice"
-    ]
+    category: Literal["meaning", "omission", "addition", "terminology", "consistency", "voice"]
     proposed_severity: Literal["major", "minor", "question"]
     source_spans: list[ReviewSpan] = Field(min_length=1)
     target_spans: list[ReviewSpan] = Field(min_length=1)
@@ -42,16 +40,14 @@ class SnapshotBlock(StrictModel):
 
 
 class SnapshotRequest(StrictModel):
-    client_request_id: str = Field(min_length=1)
+    client_request_id: str = Field(min_length=1, max_length=255)
     observed_revision_id: str | None = None
     suggestions_pending: bool
     blocks: list[SnapshotBlock] = Field(min_length=1)
 
     @field_validator("blocks")
     @classmethod
-    def require_unique_block_ids(
-        cls, blocks: list[SnapshotBlock]
-    ) -> list[SnapshotBlock]:
+    def require_unique_block_ids(cls, blocks: list[SnapshotBlock]) -> list[SnapshotBlock]:
         seen: set[str] = set()
         for block in blocks:
             if block.block_id in seen:
@@ -67,7 +63,7 @@ class RunLimits(StrictModel):
 
 
 class RunRequest(StrictModel):
-    client_request_id: str = Field(min_length=1)
+    client_request_id: str = Field(min_length=1, max_length=255)
     snapshot_id: str = Field(min_length=1)
     mode: Literal["fixture", "live"]
     model: str | None = Field(default=None, min_length=1)
@@ -75,7 +71,7 @@ class RunRequest(StrictModel):
 
 
 class DecisionRequest(StrictModel):
-    client_request_id: str = Field(min_length=1)
+    client_request_id: str = Field(min_length=1, max_length=255)
     item_id: str = Field(min_length=1)
     base_snapshot_id: str = Field(min_length=1)
     reviewed_snapshot_id: str = Field(min_length=1)
@@ -91,17 +87,35 @@ class DecisionRequest(StrictModel):
 
 
 class LessonRequest(StrictModel):
-    client_request_id: str = Field(min_length=1)
+    client_request_id: str = Field(min_length=1, max_length=255)
     originating_decision_id: str = Field(min_length=1)
+    supersedes_id: str | None = Field(default=None, min_length=1)
     scope: dict[str, Any]
     guidance: str = Field(min_length=1)
     evidence: list[dict[str, Any]]
 
 
 class ExperimentRequest(StrictModel):
-    client_request_id: str = Field(min_length=1)
+    client_request_id: str = Field(min_length=1, max_length=255)
     lesson_ids: list[str]
     evaluation_examples: list[dict[str, Any]] = Field(min_length=1)
     baseline_input: dict[str, Any]
     candidate_input: dict[str, Any]
     excluded_example_hashes: list[str]
+
+
+class ProjectRequest(StrictModel):
+    client_request_id: str = Field(min_length=1, max_length=255)
+    document_id: str = Field(min_length=1, max_length=255)
+    tab_id: str = Field(min_length=1, max_length=255)
+    book_label: str = Field(max_length=500)
+    chapter_label: str = Field(max_length=500)
+    source_language: str = Field(min_length=1, max_length=32)
+    target_language: str = Field(min_length=1, max_length=32)
+    source_text: str = Field(min_length=1)
+    english_status: Literal["unknown"] = "unknown"
+
+
+class LessonConfirmationRequest(StrictModel):
+    client_request_id: str = Field(min_length=1, max_length=255)
+    expected_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")

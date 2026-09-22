@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.21.10',
+    date: '2026-09-21',
+    highlights: [
+      'The Google Docs review prototype now keeps private review history, safely handles repeated actions, and preserves confirmed experimental lessons',
+    ],
+  },
+  {
     version: '0.21.9',
     date: '2026-09-21',
     highlights: [

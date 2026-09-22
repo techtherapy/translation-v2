@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
+from app.api.docs_review import router as docs_review_router
 from app.api.books import router as books_router
 from app.api.glossary import router as glossary_router
 from app.api.glossary_admin import router as glossary_admin_router
@@ -27,3 +28,5 @@ api_router.include_router(settings_router, prefix="/settings", tags=["settings"]
 api_router.include_router(qa_router, prefix="/qa", tags=["qa"])
 api_router.include_router(comments_router, prefix="/comments", tags=["comments"])
 api_router.include_router(knowledge_router, prefix="/knowledge")
+
+api_router.include_router(docs_review_router, prefix="/docs-review", tags=["docs-review"])
