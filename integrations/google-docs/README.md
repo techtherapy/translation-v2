@@ -70,6 +70,30 @@ The Node tests load the same global production functions with `vm`; there are no
 
 Task 6 must use a personal account to verify: authorization and consent scopes; active and nested tabs; actual named-range representation including blank paragraphs; exact selection without style/text changes; supplementary characters and repeated quotes; missing/duplicated ranges; paragraph split/merge; pending insertion/deletion/style suggestions; Docs API denial; an edit during read/after preview/after submission; two Google users with distinct BITS sessions; sign-out/401; and refusal to load a nonempty tab. Preserve the original manuscript and test only in a disposable document. Public Marketplace publication is not part of this task.
 
+### Personal-account pilot procedure
+
+Use `docs/experiments/book-300-chapter-009-pilot.md` as the evidence record. Do not convert an automated result into a live pass. Before opening Apps Script or enabling live AI, record the exact add-on commit, browser/version, personal Google account type, disposable document, BITS HTTPS origin, deployment identifier, model, verified price schedule, run-local token/cost limits, provider-side cap, and total pilot ceiling. The reviewer must approve that exact destination, model, and budget before a paid call. Keep `DOCS_REVIEW_LIVE_AI=false` until those values are recorded and approved.
+
+1. Create a disposable Google document owned by the first personal Google account. Do not use the original manuscript. Create a standalone Apps Script project from the reviewed commit, restrict script-edit access to the maintainer, and make a selected-document Editor add-on test deployment. Record the deployment ID only in a private operator field; it is not part of the experiment export.
+2. Verify the requested consent scopes against `appsscript.json`. Open the sidebar, sign in to BITS separately, and run the fixture demonstration first. The fixture has zero provider calls. Confirm the tab preview before loading Chapter 9 into an empty tab.
+3. Exercise each row in the pilot record: selection after edits before the range, repeated quotations including supplementary characters, deletion, paragraph split/merge, pending insertion/deletion/style suggestions, sidebar refresh, tab switching, sign-out/401, Docs API denial, and refusal of a nonempty tab. Record a timestamp and the observed result or error for every attempt.
+4. From the fixture or an authorized live assessment, record at least one real reviewer decision. Inspect the exact source spans, target spans, before checkpoint, after checkpoint, disposition, note, and IDs in BITS. The analyst cards remain development examples and are not established errors.
+5. Sign out. Open the same deployment with a second personal Google account and a distinct BITS user. Verify its UserProperties session is separate, its project is separately owned, and it receives `404` for the first user's private experiment/export ID. Do not share JWTs or script-edit access between accounts.
+6. Only after the recorded authorization, start the worker and enable the live gate. Run the exact pre-approved model and limits once. Review every flag plus the selected random audit passages, record false alarms and missed issues, and stop if the saved reservation reaches the pilot ceiling. Do not retry an interrupted or uncertain paid experiment.
+7. A confirmed lesson may be tested only on separately supplied passages with a source-qualified reference judgment created before arm results are shown. Record regression or insufficient evidence as the result when applicable. If no eligible decision or separate material exists, leave the lesson comparison **not run**.
+8. Save a report revision, then export the immutable owner-scoped experiment. The export includes source and target passages, prompts, model settings, outputs, usage, labels, exclusions, and report conclusions. It omits BITS JWTs, provider credentials, worker lease tokens, and reviewer account IDs, but the manuscript and model output are still sensitive and must remain in private storage.
+
+Obtain a short-lived BITS JWT through the normal `/api/auth/login` flow and place it in an environment variable without echoing it. The CLI refuses non-HTTPS origins, redirects, malformed schemas, authentication errors, and accidental overwrites:
+
+```sh
+cd backend
+BITS_ACCESS_TOKEN='short-lived-token' .venv/bin/python scripts/export_docs_review_experiment.py \
+  EXPERIMENT_ID ../private-pilot-exports/book-300-009-experiment.json \
+  --base-url https://review-backend.example
+```
+
+Use `--token-file /private/path/token.txt` instead of the environment variable when local policy requires it. Do not pass the JWT as a command-line value. Delete the token file after the export. The endpoint is feature-gated and owner-scoped; another authenticated BITS user receives the same not-found response as an unknown experiment.
+
 ## Scoped lessons and blinded experiments (Task 5)
 
 Recording **Corrected** remains a local checkpoint decision. **Propose scoped guidance** is a separate action; **Keep this decision local** creates no lesson. A proposal requires source/target languages, a construction or concept, a positive example, a counterexample, and an explicit edition restriction (possibly none). Unresolved questions, unexplained decisions, and edits outside the exact finding occurrence cannot seed guidance. Empty guidance returns “no reusable lesson.” Drafting is human-authored; no AI lesson-drafting call is made.

@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.3',
+    date: '2026-09-22',
+    highlights: [
+      'Private experiment records can now be exported for review without account identifiers or credentials',
+      'Added a step-by-step personal Google Docs pilot checklist that keeps untested observations clearly marked',
+    ],
+  },
+  {
     version: '0.24.2',
     date: '2026-09-21',
     highlights: [

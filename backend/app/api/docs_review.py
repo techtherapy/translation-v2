@@ -13,6 +13,7 @@ from app.models.docs_review import (
     DocsReviewExperiment,
     DocsReviewItem,
     DocsReviewLesson,
+    DocsReviewProject,
     DocsReviewRun,
     DocsReviewSnapshot,
 )
@@ -48,6 +49,21 @@ review_writer = require_permission("translations.edit")
 @router.get("/development-fixture")
 async def development_fixture():
     return load_development_fixture()
+
+
+@router.get("/experiments/{experiment_id}/export")
+async def export_experiment(experiment_id: str, user=Depends(enabled_user), db: AsyncSession = Depends(get_db)):
+    experiment = await db.scalar(
+        select(DocsReviewExperiment)
+        .join(DocsReviewProject, DocsReviewProject.id == DocsReviewExperiment.project_id)
+        .where(
+            DocsReviewExperiment.id == experiment_id,
+            DocsReviewProject.owner_user_id == user.id,
+        )
+    )
+    if experiment is None:
+        raise HTTPException(404, "Review evidence not found")
+    return evaluation.redact_export(repo.record_dict(experiment))
 
 
 @router.post("/projects/{project_id}/runs", status_code=201)

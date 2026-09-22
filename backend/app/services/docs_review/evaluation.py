@@ -8,6 +8,7 @@ import asyncio
 import json
 import secrets
 import unicodedata
+from contextlib import suppress
 from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -71,6 +72,541 @@ def evidence_sources(value):
     elif isinstance(value, list):
         for child in value:
             yield from evidence_sources(child)
+
+
+def _safe_leaf(value):
+    if value is None or isinstance(value, (str, int, float, bool, datetime)):
+        return deepcopy(value)
+    if isinstance(value, list):
+        return [deepcopy(item) for item in value if item is None or isinstance(item, (str, int, float, bool, datetime))]
+    return None
+
+
+def _allowed(value, fields):
+    """Copy only named scalar/list leaves from one immutable evidence object."""
+    if not isinstance(value, dict):
+        return {}
+    return {
+        name: _safe_leaf(value[name])
+        for name in fields
+        if name in value and (value[name] is None or _safe_leaf(value[name]) is not None)
+    }
+
+
+def _allowed_strings(value):
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _spans(value):
+    return [_allowed(item, ("block_id", "quote", "occurrence")) for item in value] if isinstance(value, list) else []
+
+
+def _blocks(value):
+    return (
+        [_allowed(item, ("block_id", "text", "kind", "named_range_id")) for item in value]
+        if isinstance(value, list)
+        else []
+    )
+
+
+def _guidance(value):
+    result = []
+    if not isinstance(value, list):
+        return result
+    for item in value:
+        clean = _allowed(item, ("id", "content"))
+        if isinstance(clean.get("id"), str) and clean["id"].startswith("lesson:"):
+            with suppress(json.JSONDecodeError, TypeError):
+                clean["content"] = json.dumps(_lesson(json.loads(clean["content"])), ensure_ascii=False, sort_keys=True)
+        result.append(clean)
+    return result
+
+
+def _lesson_evidence(value):
+    if not isinstance(value, dict):
+        return {}
+    clean = _allowed(
+        value,
+        ("id", "kind", "source", "source_text", "target_text", "note", "title", "quote", "explanation", "reference"),
+    )
+    if "decision" in value:
+        clean["decision"] = _allowed(
+            value["decision"],
+            (
+                "id",
+                "created_at",
+                "client_request_id",
+                "request_hash",
+                "project_id",
+                "item_id",
+                "base_snapshot_id",
+                "reviewed_snapshot_id",
+                "disposition",
+                "note",
+            ),
+        )
+    if "item" in value:
+        clean["item"] = _item(value["item"])
+    for name in ("base_blocks", "reviewed_blocks"):
+        if name in value:
+            clean[name] = _blocks(value[name])
+    return clean
+
+
+def _lesson(value):
+    clean = _allowed(
+        value,
+        ("id", "content_hash", "source_language", "target_language", "guidance"),
+    )
+    if not isinstance(value, dict):
+        return clean
+    if "scope" in value:
+        clean["scope"] = _allowed(
+            value["scope"],
+            (
+                "source_language",
+                "target_language",
+                "construction",
+                "positive_example",
+                "counterexample",
+                "edition_restriction",
+            ),
+        )
+    if "evidence" in value:
+        clean["evidence"] = [_lesson_evidence(item) for item in value["evidence"] if isinstance(item, dict)]
+    return clean
+
+
+def _prompt_data(value):
+    clean = _allowed(value, ("source_language", "target_language", "source_text"))
+    if not isinstance(value, dict):
+        return clean
+    if "source_blocks" in value:
+        clean["source_blocks"] = _blocks(value["source_blocks"])
+    if "target_blocks" in value:
+        clean["target_blocks"] = _blocks(value["target_blocks"])
+    if "supplied_guidance" in value:
+        clean["supplied_guidance"] = _guidance(value["supplied_guidance"])
+    return clean
+
+
+def _messages(value):
+    result = []
+    if not isinstance(value, list):
+        return result
+    for message in value:
+        clean = _allowed(message, ("role", "content"))
+        if clean.get("role") == "user" and isinstance(clean.get("content"), str):
+            with suppress(json.JSONDecodeError, TypeError):
+                clean["content"] = json.dumps(
+                    _prompt_data(json.loads(clean["content"])), ensure_ascii=False, sort_keys=True
+                )
+        result.append(clean)
+    return result
+
+
+def _limits(value):
+    return _allowed(value, ("max_input_tokens", "max_output_tokens", "max_cost_usd"))
+
+
+def _completion_options(value):
+    clean = _allowed(
+        value,
+        (
+            "model",
+            "max_completion_tokens",
+            "num_retries",
+            "timeout",
+            "temperature",
+            "top_p",
+            "n",
+            "stream",
+            "stop",
+            "seed",
+            "presence_penalty",
+            "frequency_penalty",
+        ),
+    )
+    if isinstance(value, dict):
+        if "messages" in value:
+            clean["messages"] = _messages(value["messages"])
+        if "response_format" in value:
+            clean["response_format"] = _allowed(value["response_format"], ("type",))
+    return clean
+
+
+def _bundle(value):
+    clean = _allowed(
+        value,
+        (
+            "source_text",
+            "source_language",
+            "target_language",
+            "model",
+            "provider",
+            "prompt_version",
+            "audit_seed",
+            "audit_count",
+            "account_spend_limit_usd",
+        ),
+    )
+    if not isinstance(value, dict):
+        return clean
+    if "target_blocks" in value:
+        clean["target_blocks"] = _blocks(value["target_blocks"])
+    if "guidance" in value:
+        clean["guidance"] = _guidance(value["guidance"])
+    if "limits" in value:
+        clean["limits"] = _limits(value["limits"])
+    if "price_schedule" in value:
+        clean["price_schedule"] = _allowed(value["price_schedule"], ("id", "input_per_million", "output_per_million"))
+    if "messages" in value:
+        clean["messages"] = _messages(value["messages"])
+    if "completion_options" in value:
+        clean["completion_options"] = _completion_options(value["completion_options"])
+    return clean
+
+
+def _configuration(value):
+    clean = _allowed(value, ("model", "generate_draft", "audit_count"))
+    if not isinstance(value, dict):
+        return clean
+    if "limits" in value:
+        clean["limits"] = _limits(value["limits"])
+    if "guidance" in value:
+        clean["guidance"] = _guidance(value["guidance"])
+    return clean
+
+
+def _arm(value):
+    clean = _allowed(value, ("configuration_id",))
+    if not isinstance(value, dict):
+        return clean
+    if "configuration" in value:
+        clean["configuration"] = _configuration(value["configuration"])
+    if "confirmed_lessons" in value:
+        clean["confirmed_lessons"] = [_lesson(item) for item in value["confirmed_lessons"] if isinstance(item, dict)]
+    if "calls" in value:
+        clean["calls"] = []
+        for item in value["calls"]:
+            call = _allowed(item, ("example_id", "outcome"))
+            if isinstance(item, dict) and "input" in item:
+                call["input"] = _bundle(item["input"])
+            clean["calls"].append(call)
+    return clean
+
+
+def _finding(value):
+    clean = _allowed(value, ("category", "proposed_severity", "explanation", "proposed_correction"))
+    if not isinstance(value, dict):
+        return clean
+    if "source_spans" in value:
+        clean["source_spans"] = _spans(value["source_spans"])
+    if "target_spans" in value:
+        clean["target_spans"] = _spans(value["target_spans"])
+    if "evidence_ids" in value:
+        clean["evidence_ids"] = _allowed_strings(value["evidence_ids"])
+    return clean
+
+
+def _item(value):
+    clean = _allowed(
+        value,
+        (
+            "id",
+            "created_at",
+            "run_id",
+            "kind",
+            "category",
+            "proposed_severity",
+            "explanation",
+            "proposed_correction",
+        ),
+    )
+    if not isinstance(value, dict):
+        return clean
+    if "source_spans" in value:
+        clean["source_spans"] = _spans(value["source_spans"])
+    if "target_spans" in value:
+        clean["target_spans"] = _spans(value["target_spans"])
+    if "evidence_ids" in value:
+        clean["evidence_ids"] = _allowed_strings(value["evidence_ids"])
+    return clean
+
+
+def _validated_result(value):
+    clean = _allowed(value, ("schema_version", "unflagged_status", "translated_text"))
+    if not isinstance(value, dict):
+        return clean
+    if "findings" in value:
+        clean["findings"] = [_finding(item) for item in value["findings"] if isinstance(item, dict)]
+    if "coverage" in value:
+        clean["coverage"] = _allowed(value["coverage"], ("source_block_ids", "target_block_ids", "complete"))
+    if "audit" in value:
+        clean["audit"] = _allowed(value["audit"], ("population", "selected_ids", "requested_count", "count", "seed"))
+    return clean
+
+
+def _output(value):
+    clean = _allowed(value, ("example_id", "outcome", "raw_response", "error_code", "late_response"))
+    if not isinstance(value, dict):
+        return clean
+    if "validated_result" in value:
+        clean["validated_result"] = (
+            _validated_result(value["validated_result"]) if value["validated_result"] is not None else None
+        )
+    if "usage" in value:
+        clean["usage"] = _allowed(
+            value["usage"],
+            (
+                "provider_calls",
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+                "actual_cost_usd",
+                "provider_error_type",
+                "reserved_cost_usd",
+                "late_response",
+            ),
+        )
+    return clean
+
+
+def _label(value):
+    clean = _allowed(
+        value,
+        (
+            "id",
+            "client_request_id",
+            "request_hash",
+            "phase",
+            "example_id",
+            "source_qualified",
+            "reference_complete",
+            "note",
+            "created_at",
+            "blinded",
+        ),
+    )
+    if not isinstance(value, dict):
+        return clean
+    if "serious_issues" in value:
+        clean["serious_issues"] = [
+            _allowed(item, ("id", "source_quote", "explanation"))
+            for item in value["serious_issues"]
+            if isinstance(item, dict)
+        ]
+    if "arms" in value and isinstance(value["arms"], dict):
+        clean["arms"] = {}
+        for alias in ("A", "B"):
+            if alias not in value["arms"] or not isinstance(value["arms"][alias], dict):
+                continue
+            arm = value["arms"][alias]
+            clean_arm = {}
+            if "flags" in arm:
+                clean_arm["flags"] = [
+                    {
+                        **_allowed(item, ("finding_index", "false_alarm")),
+                        **(
+                            {"reference_issue_ids": _allowed_strings(item["reference_issue_ids"])}
+                            if "reference_issue_ids" in item
+                            else {}
+                        ),
+                    }
+                    for item in arm["flags"]
+                    if isinstance(item, dict)
+                ]
+            if "audits" in arm:
+                clean_arm["audits"] = [
+                    {
+                        **_allowed(item, ("block_id",)),
+                        **(
+                            {"serious_issue_ids": _allowed_strings(item["serious_issue_ids"])}
+                            if "serious_issue_ids" in item
+                            else {}
+                        ),
+                    }
+                    for item in arm["audits"]
+                    if isinstance(item, dict)
+                ]
+            if "review_intervals" in arm:
+                clean_arm["review_intervals"] = [
+                    _allowed(item, ("start", "end", "active"))
+                    for item in arm["review_intervals"]
+                    if isinstance(item, dict)
+                ]
+            if "generation" in arm:
+                clean_arm["generation"] = (
+                    _allowed(arm["generation"], ("serious_issue_count", "note"))
+                    if arm["generation"] is not None
+                    else None
+                )
+            clean["arms"][alias] = clean_arm
+    return clean
+
+
+def _exclusion(value):
+    clean = _allowed(value, ("example_id", "classification", "reason", "detected_at", "excluded_hash"))
+    if isinstance(value, dict) and "matches" in value:
+        clean["matches"] = [
+            _allowed(item, ("candidate_source", "development_source", "reason"))
+            for item in value["matches"]
+            if isinstance(item, dict)
+        ]
+    return clean
+
+
+def _summary_report(value):
+    clean = _allowed(value, ("schema_version", "conclusion", "conclusion_outcome"))
+    if not isinstance(value, dict):
+        return clean
+    for field in ("assessment", "generation"):
+        if field in value and isinstance(value[field], dict):
+            clean[field] = {
+                arm: _allowed(
+                    value[field][arm],
+                    (
+                        "confirmed_missed_issues",
+                        "false_alarms",
+                        "reference_serious_issues",
+                        "flags_total",
+                        "flags_inspected",
+                        "flags_unknown",
+                        "audit_population",
+                        "audit_selected",
+                        "audit_inspected",
+                        "active_review_seconds",
+                        "review_time_unknown_examples",
+                        "measured_examples",
+                        "serious_issues",
+                        "labeled_examples",
+                        "unknown_examples",
+                    ),
+                )
+                for arm in ("baseline", "candidate")
+                if arm in value[field]
+            }
+    for field, names in (
+        ("label_coverage", ("heldout_examples", "labeled_examples", "unknown_examples")),
+        ("configuration_ids", ("baseline", "candidate")),
+    ):
+        if field in value:
+            clean[field] = _allowed(value[field], names)
+    if "exclusions" in value:
+        clean["exclusions"] = [_exclusion(item) for item in value["exclusions"] if isinstance(item, dict)]
+    if "excluded_source_hashes" in value:
+        clean["excluded_source_hashes"] = _allowed_strings(value["excluded_source_hashes"])
+    if "examples" in value:
+        clean["examples"] = []
+        for item in value["examples"]:
+            row = _allowed(item, ("example_id", "status"))
+            if isinstance(item, dict) and isinstance(item.get("outcomes"), dict):
+                row["outcomes"] = {
+                    arm: (
+                        _allowed(
+                            item["outcomes"][arm],
+                            ("confirmed_missed_issues", "false_alarms", "active_review_seconds"),
+                        )
+                        if item["outcomes"].get(arm) is not None
+                        else None
+                    )
+                    for arm in ("baseline", "candidate")
+                    if arm in item["outcomes"]
+                }
+            clean["examples"].append(row)
+    if "limitations" in value:
+        clean["limitations"] = _allowed_strings(value["limitations"])
+    if "usage" in value:
+        clean["usage"] = _execution(value["usage"])
+    return clean
+
+
+def _execution(value):
+    clean = _allowed(
+        value,
+        (
+            "status",
+            "provider_calls",
+            "error_code",
+            "lease_expires_at",
+            "reserved_cost_usd",
+            "reserved_call_count",
+        ),
+    )
+    if isinstance(value, dict) and "started_calls" in value:
+        clean["started_calls"] = [
+            _allowed(item, ("arm", "example_id", "outcome", "started_at"))
+            for item in value["started_calls"]
+            if isinstance(item, dict)
+        ]
+    return clean
+
+
+def _report(value):
+    if not isinstance(value, dict):
+        return {}
+    clean = {}
+    if "execution" in value:
+        clean["execution"] = _execution(value["execution"])
+    if "blinded_order" in value and isinstance(value["blinded_order"], dict):
+        clean["blinded_order"] = {
+            example_id: {
+                alias: arm for alias, arm in aliases.items() if alias in {"A", "B"} and arm in {"baseline", "candidate"}
+            }
+            for example_id, aliases in value["blinded_order"].items()
+            if isinstance(example_id, str) and isinstance(aliases, dict)
+        }
+    if "exclusions" in value:
+        clean["exclusions"] = [_exclusion(item) for item in value["exclusions"] if isinstance(item, dict)]
+    if "exclusion_sources" in value:
+        clean["exclusion_sources"] = _allowed_strings(value["exclusion_sources"])
+    if "revisions" in value:
+        clean["revisions"] = []
+        for item in value["revisions"]:
+            revision = _allowed(item, ("id", "client_request_id", "request_hash", "created_at"))
+            if isinstance(item, dict):
+                if "label_ids" in item:
+                    revision["label_ids"] = _allowed_strings(item["label_ids"])
+                if "report" in item:
+                    revision["report"] = _summary_report(item["report"])
+            clean["revisions"].append(revision)
+    return clean
+
+
+def redact_export(value):
+    """Return only the reproducible, account-neutral experiment evidence contract.
+
+    This is intentionally a positive allowlist. New stored fields remain private until
+    this function is deliberately extended with their nested structure.
+    """
+    clean = _allowed(
+        value,
+        ("id", "created_at", "client_request_id", "request_hash", "project_id"),
+    )
+    if not isinstance(value, dict):
+        return clean
+    for field in ("baseline_input", "candidate_input"):
+        if field in value:
+            clean[field] = _arm(value[field])
+    for field in ("lesson_ids", "excluded_example_hashes"):
+        if field in value:
+            clean[field] = _allowed_strings(value[field])
+    if "evaluation_examples" in value:
+        clean["evaluation_examples"] = [
+            _allowed(item, ("id", "source_text", "translated_text", "classification"))
+            for item in value["evaluation_examples"]
+            if isinstance(item, dict)
+        ]
+    for field in ("baseline_outputs", "candidate_outputs"):
+        if field in value:
+            clean[field] = (
+                [_output(item) for item in value[field] if isinstance(item, dict)] if value[field] is not None else None
+            )
+    if "independent_labels" in value:
+        clean["independent_labels"] = [_label(item) for item in value["independent_labels"] if isinstance(item, dict)]
+    if "report" in value:
+        clean["report"] = _report(value["report"])
+    return clean
 
 
 def freeze_arm(config, project, examples, lessons):
