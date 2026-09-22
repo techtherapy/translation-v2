@@ -823,3 +823,37 @@ async def test_new_owner_source_chapter_invalidates_already_frozen_holdout_befor
         client, admin_token, {**docs_project_payload, "client_request_id": "new-chapter", "source_text": source}
     )
     await assert_preexecution_contamination_is_excluded(client, admin_token, completed_review, db_session, waiting)
+
+
+@pytest.mark.parametrize("kind", ["guidance", "source_chapter"])
+@pytest.mark.parametrize("evidence_timing", ["before_creation", "before_execution"])
+async def test_cross_owner_evidence_does_not_contaminate_heldout_creation_or_execution(
+    client, admin_token, translator_token, completed_review, docs_project_payload, db_session, kind, evidence_timing
+):
+    from app.services.docs_review.evaluation import build_report
+
+    payload = experiment_payload()
+    source = payload["evaluation_examples"][0]["source_text"]
+    if evidence_timing == "before_execution":
+        _, view = await create(client, admin_token, completed_review, payload)
+
+    other_payload = {**docs_project_payload, "client_request_id": "other-owner-evidence"}
+    if kind == "source_chapter":
+        other_payload["source_text"] = source
+    other_project = await api_fixtures.project(client, translator_token, other_payload)
+    assert other_project["owner_user_id"] != completed_review[0]["owner_user_id"]
+    if kind == "guidance":
+        await create(client, translator_token, (other_project,), historical_evidence_payload("guidance"))
+
+    if evidence_timing == "before_creation":
+        _, view = await create(client, admin_token, completed_review, payload)
+
+    e, result = await run_experiment(db_session, completed_review, view["id"])
+    assert result["status"] == "succeeded", e.report["execution"]
+    assert e.report["execution"]["provider_calls"] == 2
+    assert len(e.baseline_outputs) == len(e.candidate_outputs) == 1
+    assert all(source not in excluded for excluded in e.report["exclusion_sources"])
+    assert e.evaluation_examples[0]["classification"] == "heldout"
+    report = build_report(e)
+    assert report["exclusions"] == []
+    assert report["label_coverage"] == {"heldout_examples": 1, "labeled_examples": 0, "unknown_examples": 1}
