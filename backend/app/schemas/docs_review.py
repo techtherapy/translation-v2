@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StrictModel(BaseModel):
@@ -46,6 +46,18 @@ class SnapshotRequest(StrictModel):
     observed_revision_id: str | None = None
     suggestions_pending: bool
     blocks: list[SnapshotBlock] = Field(min_length=1)
+
+    @field_validator("blocks")
+    @classmethod
+    def require_unique_block_ids(
+        cls, blocks: list[SnapshotBlock]
+    ) -> list[SnapshotBlock]:
+        seen: set[str] = set()
+        for block in blocks:
+            if block.block_id in seen:
+                raise ValueError(f"duplicate block_id: {block.block_id}")
+            seen.add(block.block_id)
+        return blocks
 
 
 class RunLimits(StrictModel):

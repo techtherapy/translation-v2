@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.21.9',
+    date: '2026-09-21',
+    highlights: [
+      'Review snapshots now reject duplicate passage identifiers, preventing highlights from linking to the wrong text',
+    ],
+  },
+  {
     version: '0.21.8',
     date: '2026-09-21',
     highlights: [

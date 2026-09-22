@@ -227,6 +227,33 @@ def test_request_contracts_are_strict():
             model.model_validate({**payload, "unknown": True})
 
 
+def test_snapshot_request_rejects_duplicate_block_ids():
+    from app.schemas.docs_review import SnapshotRequest
+
+    with pytest.raises(ValidationError, match="duplicate block_id: target-1"):
+        SnapshotRequest.model_validate(
+            {
+                "client_request_id": "request-1",
+                "observed_revision_id": None,
+                "suggestions_pending": False,
+                "blocks": [
+                    {
+                        "block_id": "target-1",
+                        "text": "First passage",
+                        "kind": "paragraph",
+                        "named_range_id": "range-1",
+                    },
+                    {
+                        "block_id": "target-1",
+                        "text": "Different passage",
+                        "kind": "paragraph",
+                        "named_range_id": "range-2",
+                    },
+                ],
+            }
+        )
+
+
 def test_fixture_preserves_supplied_material_and_analyst_provenance():
     fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     supplied = fixture["raw_chinese_section"] + fixture["raw_english_section"]
