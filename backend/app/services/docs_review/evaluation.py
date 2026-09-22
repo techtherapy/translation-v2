@@ -122,37 +122,6 @@ def _guidance(value):
     return result
 
 
-def _lesson_evidence(value):
-    if not isinstance(value, dict):
-        return {}
-    clean = _allowed(
-        value,
-        ("id", "kind", "source", "source_text", "target_text", "note", "title", "quote", "explanation", "reference"),
-    )
-    if "decision" in value:
-        clean["decision"] = _allowed(
-            value["decision"],
-            (
-                "id",
-                "created_at",
-                "client_request_id",
-                "request_hash",
-                "project_id",
-                "item_id",
-                "base_snapshot_id",
-                "reviewed_snapshot_id",
-                "disposition",
-                "note",
-            ),
-        )
-    if "item" in value:
-        clean["item"] = _item(value["item"])
-    for name in ("base_blocks", "reviewed_blocks"):
-        if name in value:
-            clean[name] = _blocks(value[name])
-    return clean
-
-
 def _lesson(value):
     clean = _allowed(
         value,
@@ -172,8 +141,6 @@ def _lesson(value):
                 "edition_restriction",
             ),
         )
-    if "evidence" in value:
-        clean["evidence"] = [_lesson_evidence(item) for item in value["evidence"] if isinstance(item, dict)]
     return clean
 
 
@@ -259,7 +226,11 @@ def _bundle(value):
     if "limits" in value:
         clean["limits"] = _limits(value["limits"])
     if "price_schedule" in value:
-        clean["price_schedule"] = _allowed(value["price_schedule"], ("id", "input_per_million", "output_per_million"))
+        clean["price_schedule"] = (
+            _allowed(value["price_schedule"], ("id", "input_per_million", "output_per_million"))
+            if value["price_schedule"] is not None
+            else None
+        )
     if "messages" in value:
         clean["messages"] = _messages(value["messages"])
     if "completion_options" in value:
@@ -298,31 +269,6 @@ def _arm(value):
 
 def _finding(value):
     clean = _allowed(value, ("category", "proposed_severity", "explanation", "proposed_correction"))
-    if not isinstance(value, dict):
-        return clean
-    if "source_spans" in value:
-        clean["source_spans"] = _spans(value["source_spans"])
-    if "target_spans" in value:
-        clean["target_spans"] = _spans(value["target_spans"])
-    if "evidence_ids" in value:
-        clean["evidence_ids"] = _allowed_strings(value["evidence_ids"])
-    return clean
-
-
-def _item(value):
-    clean = _allowed(
-        value,
-        (
-            "id",
-            "created_at",
-            "run_id",
-            "kind",
-            "category",
-            "proposed_severity",
-            "explanation",
-            "proposed_correction",
-        ),
-    )
     if not isinstance(value, dict):
         return clean
     if "source_spans" in value:
@@ -668,6 +614,23 @@ def freeze_arm(config, project, examples, lessons):
     return {**arm, "configuration_id": evidence_hash(arm)}
 
 
+def account_neutral_lesson(lesson):
+    """Freeze only lesson content that is safe and necessary for an experiment.
+
+    Reviewer identity, originating decision lineage, supersession lineage, and raw
+    evidence remain in the owner-only lesson record and never enter provider input.
+    """
+    content = repo.lesson_content(lesson)
+    return dict(
+        id=lesson.id,
+        content_hash=lesson.content_hash,
+        source_language=content["source_language"],
+        target_language=content["target_language"],
+        scope=deepcopy(content["scope"]),
+        guidance=content["guidance"],
+    )
+
+
 async def create_experiment(db, owner_id, project_id, request):
     project = await repo.get_project(db, owner_id, project_id, lock=True)
     payload = request.model_dump()
@@ -696,7 +659,7 @@ async def create_experiment(db, owner_id, project_id, request):
         lesson = await repo._nested(db, DocsReviewLesson, project_id, lid)
         if lesson.status != "confirmed" or lesson.content_hash != evidence_hash(repo.lesson_content(lesson)):
             raise HTTPException(409, "Experiments require intact confirmed lessons")
-        lessons.append(dict(id=lesson.id, content_hash=lesson.content_hash, **repo.lesson_content(lesson)))
+        lessons.append(account_neutral_lesson(lesson))
     sources = await current_development_sources(db, owner_id)
     sources.extend(request.development_sources)
     sources.extend(g.content for g in config.guidance)

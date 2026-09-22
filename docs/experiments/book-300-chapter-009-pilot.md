@@ -21,12 +21,12 @@ This record separates automated repository evidence from live Google Docs and hu
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Redacted experiment export keeps the allowlisted immutable contract and removes seeded credentials at nested levels | passed | `backend/tests/test_docs_review_export.py` — 6 tests passed locally on 2026-09-21 |
+| Redacted experiment export keeps the allowlisted immutable contract, reproduces the frozen configuration identity, and removes seeded credentials at nested levels | passed | `backend/tests/test_docs_review_export.py` — 15 tests passed locally on 2026-09-22 |
 | Export endpoint requires authentication and returns data only to the owning BITS user | passed | Same local suite; another authenticated user receives not found |
 | Export CLI sends a bearer session only to an explicit HTTPS BITS origin and fails closed on HTTP/schema errors | passed | Same local suite; no network request left the test process |
-| Affected review, authentication, evaluation/knowledge, job and worker suites | passed | 102 backend tests passed locally on 2026-09-21 |
+| Affected review export, authentication, evaluation/knowledge, API, job and worker suites | passed | 112 focused backend tests passed locally on 2026-09-22 |
 | Google Docs add-on behavior suite | passed | 29 Node tests passed locally on 2026-09-21; this is simulated Apps Script behavior, not a browser observation |
-| Complete backend regression suite | passed | 177 tests passed and 1 optional PostgreSQL integration test skipped locally on 2026-09-21 |
+| Complete backend regression suite | previously passed; not repeated after the scoped export fix | 177 tests passed and 1 optional PostgreSQL integration test skipped on 2026-09-21; the final producer/schema changes were covered by the 112 focused tests above |
 
 Automated tests used in-memory storage, fake queues/completion clients, and mock HTTP transport. They did not contact Google, Redis, a model provider, or a deployed BITS service and incurred no provider cost.
 
@@ -39,8 +39,8 @@ Automated tests used in-memory storage, fake queues/completion clients, and mock
 | Active and nested tab identity remains bound correctly | **not run** | **not run** | **not run** |
 | Exact named-range selection after text is inserted or edited before the range | **not run** | **not run** | **not run** |
 | Repeated quotations and supplementary characters select the intended occurrence without changing text or style | **not run** | **not run** | **not run** |
-| Deleted or duplicated range blocks use | **not run** | **not run** | **not run** |
-| Paragraph split, merge, or moved text blocks use rather than fuzzy reattaching | **not run** | **not run** | **not run** |
+| Deleted or duplicated range blocks block use and require refresh/reassociation, with no fuzzy reattachment | **not run** | **not run** | **not run** |
+| Paragraph split, merge, or moved text blocks block use and require refresh/reassociation, with no fuzzy reattachment | **not run** | **not run** | **not run** |
 | Pending insertion, deletion, or style suggestion blocks the checkpoint | **not run** | **not run** | **not run** |
 | Native accepted-preview content is not treated as reviewer approval | **not run** | **not run** | **not run** |
 | Sidebar refresh resumes the saved owner-specific binding and run status | **not run** | **not run** | **not run** |

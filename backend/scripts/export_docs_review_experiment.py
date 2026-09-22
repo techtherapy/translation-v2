@@ -10,26 +10,14 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import httpx
+from pydantic import ValidationError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.schemas.docs_review_export import DocsReviewExperimentExport  # noqa: E402
 from app.services.docs_review.evaluation import redact_export  # noqa: E402
-
-REQUIRED_FIELDS = {
-    "id",
-    "project_id",
-    "baseline_input",
-    "candidate_input",
-    "lesson_ids",
-    "excluded_example_hashes",
-    "evaluation_examples",
-    "baseline_outputs",
-    "candidate_outputs",
-    "independent_labels",
-    "report",
-}
 
 
 class ExportError(RuntimeError):
@@ -37,18 +25,14 @@ class ExportError(RuntimeError):
 
 
 def validate_export(payload, experiment_id):
-    if not isinstance(payload, dict) or not payload.keys() >= REQUIRED_FIELDS:
-        raise ExportError("BITS returned an incomplete experiment export schema")
-    if payload.get("id") != experiment_id:
+    sanitized = redact_export(payload)
+    try:
+        validated = DocsReviewExperimentExport.model_validate(sanitized)
+    except ValidationError as exc:
+        raise ExportError("BITS returned an invalid experiment export schema") from exc
+    if validated.id != experiment_id:
         raise ExportError("BITS returned a different experiment than requested")
-    report = payload.get("report")
-    if not isinstance(report, dict) or not isinstance(report.get("execution"), dict):
-        raise ExportError("BITS returned an invalid experiment report schema")
-    for name in ("baseline_input", "candidate_input"):
-        arm = payload.get(name)
-        if not isinstance(arm, dict) or not {"configuration", "configuration_id", "calls"} <= arm.keys():
-            raise ExportError(f"BITS returned an invalid {name} schema")
-    return redact_export(payload)
+    return sanitized
 
 
 def fetch_export(base_url, token, experiment_id, *, client=None):
@@ -61,7 +45,7 @@ def fetch_export(base_url, token, experiment_id, *, client=None):
     own_client = client is None
     client = client or httpx.Client(timeout=30.0, follow_redirects=False)
     try:
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"}, follow_redirects=False)
         if response.status_code != 200:
             raise ExportError(f"BITS export request failed with HTTP {response.status_code}")
         try:

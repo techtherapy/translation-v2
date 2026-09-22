@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.4',
+    date: '2026-09-22',
+    highlights: [
+      'Exported comparisons now preserve their verification identity and reject incomplete or malformed records',
+      'Confirmed guidance sent for comparison no longer includes reviewer identity or private decision evidence',
+    ],
+  },
+  {
     version: '0.24.3',
     date: '2026-09-22',
     highlights: [
