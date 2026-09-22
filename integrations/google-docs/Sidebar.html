@@ -231,7 +231,11 @@
             var node = appendText(select, "option", option[1]);
             node.value = option[0];
           });
-          var noteLabel = appendText(card, "label", "Review note");
+          var noteLabel = appendText(
+            card,
+            "label",
+            "Review note (up to 5,000 characters; long notes may need shortening)",
+          );
           var note = appendText(noteLabel, "textarea", "");
           note.maxLength = 5000;
           button(card, "Preview decision", function () {

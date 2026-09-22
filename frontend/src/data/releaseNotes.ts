@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.22.1',
+    date: '2026-09-21',
+    highlights: [
+      'Google Docs review now selects findings that cover an entire passage and asks you to shorten oversized review notes before saving a checkpoint',
+    ],
+  },
+  {
     version: '0.22.0',
     date: '2026-09-21',
     highlights: [

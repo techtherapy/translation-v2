@@ -258,6 +258,7 @@ function selectItem_(binding, base, item) {
   var named = bound.tab.getNamedRangeById(binding.itemAnchors[item.id]);
   if (
     !named ||
+    named.getId() !== binding.itemAnchors[item.id] ||
     named.getName() !== name ||
     bound.tab.getNamedRanges(name).length !== 1
   ) {
@@ -276,13 +277,19 @@ function selectItem_(binding, base, item) {
     });
     if (
       String(element.getType()) !== "TEXT" ||
-      bound.tab.getBody().getChildIndex(element.getParent()) !== blockIndex ||
-      !part.isPartial() ||
-      element
-        .getText()
-        .slice(part.getStartOffset(), part.getEndOffsetInclusive() + 1) !==
-        span.quote
+      bound.tab.getBody().getChildIndex(element.getParent()) !== blockIndex
     ) {
+      throw new Error(
+        "Finding quote or passage changed. Refresh and reassociate.",
+      );
+    }
+    // Whole Text elements use -1 sentinel offsets; their selected text is the full element.
+    var selectedText = element.getText();
+    var start = part.isPartial() ? part.getStartOffset() : 0;
+    var end = part.isPartial()
+      ? part.getEndOffsetInclusive()
+      : selectedText.length - 1;
+    if (selectedText.slice(start, end + 1) !== span.quote) {
       throw new Error(
         "Finding quote or passage changed. Refresh and reassociate.",
       );
@@ -292,10 +299,7 @@ function selectItem_(binding, base, item) {
       span.quote,
       span.occurrence,
     );
-    if (
-      part.getStartOffset() !== offsets.start ||
-      part.getEndOffsetInclusive() !== offsets.end
-    ) {
+    if (start !== offsets.start || end !== offsets.end) {
       throw new Error("Finding occurrence changed. Refresh and reassociate.");
     }
   });

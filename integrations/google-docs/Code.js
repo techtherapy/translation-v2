@@ -233,6 +233,25 @@ function prepareDecision(itemId, disposition, note) {
     throw new Error(
       "Describe the source-grounded issue before recording an audit decision.",
     );
+  var pending = {
+    nonce: Utilities.getUuid(),
+    projectId: binding.projectId,
+    runId: binding.runId,
+    itemId: itemId,
+    baseId: base.id,
+    // Backend EvidenceRecord IDs are UUID strings (36 ASCII characters).
+    // Reserve their exact serialized size before creating the checkpoint.
+    reviewedId: "00000000-0000-0000-0000-000000000000",
+    disposition: disposition,
+    note: note,
+  };
+  // Leave a small margin under Apps Script's 9 KB per-property limit.
+  // JSON escaping and UTF-8 encoding can both make a note larger than its character count.
+  if (Utilities.newBlob(JSON.stringify(pending)).getBytes().length > 9000) {
+    throw new Error(
+      "Review note is too large to save. Shorten it and preview the decision again. No checkpoint was created.",
+    );
+  }
   var current = readCheckpoint_(binding);
   verifyBlockAnchors_(binding, base, boundDocument_(binding).tab);
   var reviewed = apiRequest_(projectPath_(binding) + "/snapshots", "post", {
@@ -262,16 +281,7 @@ function prepareDecision(itemId, disposition, note) {
     throw new Error(
       "Corrected requires a changed chapter and explicit before/after review.",
     );
-  var pending = {
-    nonce: Utilities.getUuid(),
-    projectId: binding.projectId,
-    runId: binding.runId,
-    itemId: itemId,
-    baseId: base.id,
-    reviewedId: reviewed.id,
-    disposition: disposition,
-    note: note,
-  };
+  pending.reviewedId = reviewed.id;
   PropertiesService.getUserProperties().setProperty(
     "bits.pending",
     JSON.stringify(pending),

@@ -190,7 +190,12 @@ test("decision preview captures both checkpoints; later typing cannot be certifi
         deleteProperty: (k) => delete saved[k],
       }),
     },
-    Utilities: { getUuid: () => "nonce" },
+    Utilities: {
+      getUuid: () => "nonce",
+      newBlob: (value) => ({
+        getBytes: () => Array.from(Buffer.from(value, "utf8")),
+      }),
+    },
   });
   assert.equal(typeof c.prepareDecision, "function");
   c.binding_ = () => binding;
@@ -359,4 +364,136 @@ test("chapter-loading rejects whitespace-only content and empty embedded structu
   body.getText = () => "";
   assert.throws(() => c.loadEmptyTab_(body, "chapter"), /Unsupported/);
   assert.equal(writes, 0);
+});
+
+test("whole-Text named ranges select full-block quotes with sentinel offsets", () => {
+  const c = load();
+  const selections = [];
+  const paragraph = {};
+  let textValue = "😀 complete passage";
+  let paragraphIndex = 0;
+  let rangeId = "whole-range";
+  const element = {
+    getType: () => "TEXT",
+    getParent: () => paragraph,
+    getText: () => textValue,
+  };
+  const range = {
+    getRangeElements: () => [
+      {
+        getElement: () => element,
+        isPartial: () => false,
+        getStartOffset: () => -1,
+        getEndOffsetInclusive: () => -1,
+      },
+    ],
+  };
+  const named = {
+    getId: () => rangeId,
+    getName: () => "bits-review:run:item",
+    getRange: () => range,
+  };
+  c.boundDocument_ = () => ({
+    doc: {
+      setActiveTab: (id) => selections.push(id),
+      setSelection: (value) => selections.push(value),
+    },
+    tab: {
+      getNamedRangeById: (id) => (id === "whole-range" ? named : null),
+      getNamedRanges: () => [named],
+      getBody: () => ({ getChildIndex: () => paragraphIndex }),
+    },
+  });
+  c.verifyBlockAnchors_ = () => {};
+  const binding = {
+    tabId: "tab",
+    runId: "run",
+    itemAnchors: { item: "whole-range" },
+  };
+  const base = { blocks: [{ block_id: "block", text: "😀 complete passage" }] };
+  const item = {
+    id: "item",
+    target_spans: [
+      { block_id: "block", quote: "😀 complete passage", occurrence: 0 },
+    ],
+  };
+  c.selectItem_(binding, base, item);
+  assert.deepEqual(selections, ["tab", range]);
+  textValue = "changed";
+  assert.throws(() => c.selectItem_(binding, base, item), /quote|passage/);
+  textValue = "😀 complete passage";
+  paragraphIndex = 1;
+  assert.throws(() => c.selectItem_(binding, base, item), /quote|passage/);
+  paragraphIndex = 0;
+  item.target_spans[0].occurrence = 1;
+  assert.throws(() => c.selectItem_(binding, base, item), /quote|occurrence/);
+  item.target_spans[0].occurrence = 0;
+  rangeId = "other-range";
+  assert.throws(() => c.selectItem_(binding, base, item), /anchor/);
+  assert.equal(selections.length, 2);
+});
+
+test("oversize serialized notes are rejected before creating any checkpoint", () => {
+  const properties = {};
+  const posts = [];
+  let documentReads = 0;
+  const c = load({
+    PropertiesService: {
+      getUserProperties: () => ({
+        deleteProperty: (key) => delete properties[key],
+        setProperty: (key, value) => {
+          if (Buffer.byteLength(value, "utf8") > 9216)
+            throw new Error("Google property quota exceeded");
+          properties[key] = value;
+        },
+      }),
+    },
+    Utilities: {
+      getUuid: () => "00000000-0000-0000-0000-000000000000",
+      newBlob: (value) => ({
+        getBytes: () => Array.from(Buffer.from(value, "utf8")),
+      }),
+    },
+  });
+  c.binding_ = () => ({ projectId: "project", baseId: "base", runId: "run" });
+  c.baseSnapshot_ = () => ({
+    id: "base",
+    canonical_text: "old",
+    target_sha256: "old",
+    blocks: [{ block_id: "block" }],
+  });
+  c.reviewRun_ = () => ({ items: [{ id: "item", kind: "finding" }] });
+  c.boundDocument_ = () => ({ tab: {} });
+  c.verifyBlockAnchors_ = () => {};
+  c.readCheckpoint_ = () => {
+    documentReads++;
+    return {
+      text: "new",
+      revisionId: "r",
+      blocks: [{ text: "new", kind: "paragraph" }],
+    };
+  };
+  c.apiRequest_ = (path, method, payload) => {
+    posts.push({ path, method, payload });
+    return {
+      id: "00000000-0000-0000-0000-000000000000",
+      canonical_text: "new",
+      target_sha256: "new",
+    };
+  };
+  // Each is within the advertised 5,000-character bound, but cannot fit as JSON UTF-8.
+  for (const note of ["佛".repeat(3100), '"'.repeat(5000), "😀".repeat(2500)]) {
+    assert.throws(
+      () => c.prepareDecision("item", "corrected", note),
+      /note.*too large.*[Ss]horten/,
+    );
+    assert.equal(posts.length, 0);
+    assert.equal(documentReads, 0);
+    assert.equal(properties["bits.pending"], undefined);
+  }
+  const accepted = "a".repeat(5000);
+  c.prepareDecision("item", "corrected", accepted);
+  assert.equal(posts.length, 1);
+  assert.equal(JSON.parse(properties["bits.pending"]).note, accepted);
+  assert.ok(Buffer.byteLength(properties["bits.pending"], "utf8") <= 9000);
 });
