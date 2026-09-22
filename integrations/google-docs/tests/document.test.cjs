@@ -500,12 +500,20 @@ test("oversize serialized notes are rejected before creating any checkpoint", ()
 
 function sidebar(globals = {}) {
   const elements = new Map();
-  function element() {
+  function element(tagName) {
     return {
+      tagName,
+      dataset: {},
+      handlers: {},
+      set innerHTML(_value) {
+        throw new Error("Unsafe HTML rendering");
+      },
       textContent: "",
       value: "",
       children: [],
-      addEventListener() {},
+      addEventListener(name, handler) {
+        this.handlers[name] = handler;
+      },
       appendChild(n) {
         this.children.push(n);
       },
@@ -942,4 +950,167 @@ test("uncertain HTTP outcomes keep the identical frozen run request", () => {
     assert.deepEqual(posts, [original, original]);
     assert.equal(binding.pendingRunRequest, undefined);
   }
+});
+
+test("lesson proposal and exact-hash confirmation are separate from local correction", () => {
+  const c = load({ Utilities: { getUuid: () => "request" } });
+  c.binding_ = () => ({ projectId: "p" });
+  const calls = [];
+  c.lessonRequest_ = (_binding, suffix, method, payload) => {
+    calls.push({ suffix, method, payload });
+    if (method === "get")
+      return { id: "l", content_hash: "exact", conflict_hash: "conflicts" };
+    return payload;
+  };
+  assert.equal(typeof c.proposeReviewLesson, "function");
+  const scope = {
+    source_language: "zh",
+    target_language: "en",
+    construction: "term",
+    positive_example: "yes",
+    counterexample: "no",
+    edition_restriction: null,
+  };
+  c.proposeReviewLesson(
+    "decision",
+    { client_request_id: "proposal", scope, guidance: "Scoped guidance" },
+    null,
+  );
+  assert.equal(calls[0].suffix, "");
+  assert.equal(calls[0].payload.originating_decision_id, "decision");
+  assert.equal(calls[0].payload.supersedes_id, null);
+  assert.throws(
+    () => c.confirmReviewLesson("l", "wrong", "conflicts", {}, "confirm"),
+    /changed/,
+  );
+  assert.equal(calls.filter((c) => c.suffix.endsWith("confirm")).length, 0);
+  c.confirmReviewLesson(
+    "l",
+    "exact",
+    "conflicts",
+    { older: "Different edition" },
+    "confirm",
+  );
+  const sent = calls.at(-1).payload;
+  assert.equal(sent.expected_content_hash, "exact");
+  assert.equal(sent.expected_conflict_hash, "conflicts");
+  assert.equal(sent.conflict_resolutions.older, "Different edition");
+  assert.equal(sent.client_request_id, "confirm");
+});
+
+test("sidebar lesson preview renders scope, hostile strings, conflicts, and immutable confirmation hash", () => {
+  const { c, document } = sidebar();
+  assert.equal(typeof c.renderLesson, "function");
+  const calls = [];
+  c.call = (name, args) => calls.push({ name, args });
+  c.newActionId = () => "confirm-id";
+  const hostile = '<img src=x onerror="throw 1">';
+  c.renderLesson({
+    id: "lesson",
+    status: "proposed",
+    originating_decision_id: "decision",
+    content_hash: "abc123",
+    conflict_hash: "conflict-sha",
+    guidance: hostile,
+    scope: {
+      source_language: "zh",
+      target_language: "en",
+      construction: "Yidam",
+      positive_example: "use",
+      counterexample: "except",
+      edition_restriction: null,
+    },
+    evidence: [],
+    conflicts: [
+      { id: "old", guidance: hostile, scope: { construction: "Other scope" } },
+    ],
+  });
+  function all(node) {
+    return [node, ...node.children.flatMap(all)];
+  }
+  const nodes = all(document.getElementById("lessonPanel"));
+  assert.ok(nodes.some((n) => n.textContent === hostile));
+  assert.ok(nodes.some((n) => n.textContent.includes("abc123")));
+  assert.ok(nodes.some((n) => n.textContent.includes("Potential conflict")));
+  const resolution = nodes.find(
+    (n) =>
+      n.tagName === "textarea" && n.dataset && n.dataset.conflictId === "old",
+  );
+  assert.ok(resolution);
+  resolution.value = "Specific exception";
+  nodes
+    .find((n) => n.textContent === "Confirm experimental lesson")
+    .handlers.click();
+  assert.equal(calls[0].name, "confirmReviewLesson");
+  assert.equal(calls[0].args[1], "abc123");
+  assert.equal(calls[0].args[2], "conflict-sha");
+  assert.equal(calls[0].args[3].old, "Specific exception");
+});
+
+test("sidebar local-decision choice never confirms or activates guidance", () => {
+  const { c, document } = sidebar();
+  assert.equal(typeof c.renderLearningChoice, "function");
+  c.call = () =>
+    assert.fail("Keeping a correction local must not call lesson confirmation");
+  c.renderLearningChoice({
+    id: "d",
+    disposition: "corrected",
+    note: "Local correction",
+  });
+  function all(node) {
+    return [node, ...node.children.flatMap(all)];
+  }
+  const nodes = all(document.getElementById("lessonPanel"));
+  nodes
+    .find((n) => n.textContent === "Keep this decision local")
+    .handlers.click();
+  assert.match(
+    document.getElementById("status").textContent,
+    /No reusable lesson/,
+  );
+});
+
+test("experiment bridge sends blinded labels without invented reviewer identity and refreshes reveal", () => {
+  const c = load();
+  c.binding_ = () => ({ projectId: "p" });
+  const calls = [];
+  c.experimentRequest_ = (_binding, suffix, method, payload) => {
+    calls.push({ suffix, method, payload });
+    return method === "get"
+      ? { examples: [{ arm_key: { A: "candidate", B: "baseline" } }] }
+      : { id: "label" };
+  };
+  assert.equal(typeof c.submitExperimentLabel, "function");
+  const label = {
+    client_request_id: "label",
+    example_id: "e",
+    phase: "judgment",
+    arms: { A: {}, B: {} },
+    note: "Checked",
+  };
+  const revealed = c.submitExperimentLabel("experiment", label);
+  assert.equal(calls[0].suffix, "/experiment/labels");
+  assert.equal(calls[0].payload.reviewer_id, undefined);
+  assert.equal(calls[1].method, "get");
+  assert.equal(revealed.examples[0].arm_key.A, "candidate");
+});
+
+test("active review timer excludes explicit pauses, hidden time, and inactivity", () => {
+  const { c } = sidebar();
+  assert.equal(typeof c.createActiveReviewClock, "function");
+  let time = 0;
+  const timer = c.createActiveReviewClock(() => time, 60);
+  timer.start();
+  time = 10;
+  timer.touch();
+  time = 100;
+  timer.pause();
+  time = 500;
+  timer.start();
+  time = 512;
+  timer.pause();
+  assert.equal(
+    timer.intervals().reduce((n, i) => n + i.end - i.start, 0),
+    82,
+  );
 });

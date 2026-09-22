@@ -69,3 +69,28 @@ cd .. && node --test integrations/google-docs/tests/*.test.cjs
 The Node tests load the same global production functions with `vm`; there are no CommonJS exports in Apps Script files. They validate pure state logic and mocked service contracts. They do **not** prove real Google authorization, menu installation, range survival, selection behavior, suggestion permissions, or canonical-text agreement.
 
 Task 6 must use a personal account to verify: authorization and consent scopes; active and nested tabs; actual named-range representation including blank paragraphs; exact selection without style/text changes; supplementary characters and repeated quotes; missing/duplicated ranges; paragraph split/merge; pending insertion/deletion/style suggestions; Docs API denial; an edit during read/after preview/after submission; two Google users with distinct BITS sessions; sign-out/401; and refusal to load a nonempty tab. Preserve the original manuscript and test only in a disposable document. Public Marketplace publication is not part of this task.
+
+## Scoped lessons and blinded experiments (Task 5)
+
+Recording **Corrected** remains a local checkpoint decision. **Propose scoped guidance** is a separate action; **Keep this decision local** creates no lesson. A proposal requires source/target languages, a construction or concept, a positive example, a counterexample, and an explicit edition restriction (possibly none). Unresolved questions, unexplained decisions, and edits outside the exact finding occurrence cannot seed guidance. Empty guidance returns “no reusable lesson.” Drafting is human-authored; no AI lesson-drafting call is made.
+
+The proposal shows its exact content hash, decision/item/source/before/after evidence, and potentially overlapping confirmed guidance. Confirmation checks the displayed hash and requires a resolution note for each conflict. Refinement creates a new proposed revision without changing its predecessor. Nothing activates shared knowledge. Copy a lesson ID to reopen it or select it explicitly in an experiment.
+
+**Freeze paired experiment** saves a separate source passage and its supplied translation, complete model options, prompts, languages, guidance, limits, prices, audit settings, and selected confirmed lesson revisions. Client baseline/candidate configurations must be identical: the server adds only selected lessons to the candidate. Selecting none restores the same baseline configuration. Optional draft generation is a separate structured call and quality outcome; it does not receive the supplied translation or assessment findings.
+
+The cost ceiling covers both arms and all examples, including generation. **Run or retry queue delivery** explicitly starts the gated worker, which reserves the entire budget before any call and durably records each attempt before dispatch. Responses and actual token usage are retained. Queue retries reuse one job ID; a started experiment never retries after failure, expiry, cancellation, or uncertain completion. Late output remains private evidence and cannot revive an interrupted experiment.
+
+Chapter 9, reviewed source chapters, lesson evidence, supplied guidance examples, explicit development sources, and previously labeled passages are exclusions. Exact normalized/substring overlap is rejected for heldouts; fuzzy high overlap requires manual review and reclassification as development or exclusion. Original strings and match reasons are retained. Execution rechecks new evidence before reserving budget. Similarity screening does not establish semantic independence. Development examples may be exercised but never count toward independent evaluation.
+
+Each example requires an authenticated, source-qualified reference review before either arm's outputs appear. Reference labels then become immutable. Review anonymous A/B outputs, recording false alarms, links to reference serious issues, inspected random audits, and active time. Start/pause controls exclude pauses, hidden time, and inactivity beyond 60 seconds; missing timing stays unknown. The first judgment reveals that example's arm identity. Later judgments are append-only unblinded amendments, excluded from blinded conclusions.
+
+**Save a new report revision** retains earlier reports and labels. Reports separate assessment misses, false alarms, time, audit/flag coverage, and optional generation quality. Unknown labels stay unknown. Arm-specific output counts for unjudged examples are withheld to preserve blinding. Conclusions concern assessment only: `inconclusive`, `regression`, or `candidate_for_larger_trial`, never production readiness. Each report records configuration IDs, exclusions, label IDs, authenticated reviewer attribution, and usage/reservation information. Per-example reference issues and judgment history remain available in the owner-only response.
+
+Offline verification:
+
+```sh
+cd backend && .venv/bin/python -m pytest tests/test_docs_review_learning.py tests/test_docs_review_evaluation.py -q
+cd .. && node --test integrations/google-docs/tests/*.test.cjs
+```
+
+Only fake completion clients and queues were used. Real Google, Redis, provider, and account behavior remains a separately authorized smoke test.

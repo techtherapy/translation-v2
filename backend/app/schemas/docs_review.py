@@ -99,12 +99,35 @@ class DecisionRequest(StrictModel):
     note: str
 
 
+class LessonScope(StrictModel):
+    source_language: str = Field(min_length=1)
+    target_language: str = Field(min_length=1)
+    construction: str = Field(min_length=1)
+    positive_example: str = Field(min_length=1)
+    counterexample: str = Field(min_length=1)
+    edition_restriction: str | None
+
+    @field_validator(
+        "source_language",
+        "target_language",
+        "construction",
+        "positive_example",
+        "counterexample",
+        "edition_restriction",
+    )
+    @classmethod
+    def nonblank(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError("Scope fields cannot be blank")
+        return value
+
+
 class LessonRequest(StrictModel):
     client_request_id: str = Field(min_length=1, max_length=255)
     originating_decision_id: str = Field(min_length=1)
     supersedes_id: str | None = Field(default=None, min_length=1)
     scope: dict[str, Any]
-    guidance: str = Field(min_length=1)
+    guidance: str
     evidence: list[dict[str, Any]]
 
 
@@ -115,6 +138,7 @@ class ExperimentRequest(StrictModel):
     baseline_input: dict[str, Any]
     candidate_input: dict[str, Any]
     excluded_example_hashes: list[str]
+    development_sources: list[str] = Field(default_factory=list)
 
 
 class ProjectRequest(StrictModel):
@@ -132,6 +156,8 @@ class ProjectRequest(StrictModel):
 class LessonConfirmationRequest(StrictModel):
     client_request_id: str = Field(min_length=1, max_length=255)
     expected_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_conflict_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    conflict_resolutions: dict[str, str] = Field(default_factory=dict)
 
 
 class ReviewCoverage(StrictModel):
@@ -142,3 +168,80 @@ class ReviewCoverage(StrictModel):
 
 class LiveReviewAssessment(ReviewAssessment):
     coverage: ReviewCoverage
+
+
+class ExperimentConfiguration(StrictModel):
+    model: str = Field(min_length=1)
+    limits: RunLimits
+    guidance: list[SuppliedGuidance] = Field(default_factory=list)
+    generate_draft: bool = False
+    audit_count: int = Field(default=1, ge=0, le=20)
+
+
+class EvaluationExample(StrictModel):
+    id: str = Field(min_length=1, max_length=255)
+    source_text: str = Field(min_length=1)
+    translated_text: str = Field(min_length=1)
+    classification: Literal["heldout", "development"] = "heldout"
+
+
+class ReferenceIssue(StrictModel):
+    id: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+    explanation: str = Field(min_length=1)
+
+
+class ReferenceLabelRequest(StrictModel):
+    client_request_id: str = Field(min_length=1, max_length=255)
+    phase: Literal["reference"]
+    example_id: str = Field(min_length=1)
+    source_qualified: Literal[True]
+    reference_complete: bool
+    serious_issues: list[ReferenceIssue]
+    note: str = Field(min_length=1)
+
+
+class ReviewInterval(StrictModel):
+    start: float = Field(ge=0, allow_inf_nan=False)
+    end: float = Field(gt=0, allow_inf_nan=False)
+    active: bool
+
+
+class FlagJudgment(StrictModel):
+    finding_index: int = Field(ge=0)
+    false_alarm: bool | None
+    reference_issue_ids: list[str]
+
+
+class AuditJudgment(StrictModel):
+    block_id: str
+    serious_issue_ids: list[str]
+
+
+class GenerationJudgment(StrictModel):
+    serious_issue_count: int | None = Field(ge=0)
+    note: str
+
+
+class ArmJudgment(StrictModel):
+    flags: list[FlagJudgment]
+    audits: list[AuditJudgment]
+    review_intervals: list[ReviewInterval]
+    generation: GenerationJudgment | None = None
+
+
+class ExperimentJudgmentRequest(StrictModel):
+    client_request_id: str = Field(min_length=1, max_length=255)
+    phase: Literal["judgment"]
+    example_id: str = Field(min_length=1)
+    arms: dict[str, ArmJudgment]
+    note: str = Field(min_length=1)
+
+
+class ReportRequest(StrictModel):
+    client_request_id: str = Field(min_length=1, max_length=255)
+
+
+class GeneratedDraft(StrictModel):
+    schema_version: Literal[1]
+    translated_text: str = Field(min_length=1)

@@ -18,7 +18,7 @@ from arq.connections import RedisSettings
 from app.core.config import get_settings
 from app.core.database import async_session
 from app.services.runtime_settings import load_settings_into_env
-from app.worker.docs_review import review_docs_snapshot
+from app.worker.docs_review import evaluate_docs_experiment, review_docs_snapshot
 from app.worker.tasks import translate_chapter_spike
 
 settings = get_settings()
@@ -37,7 +37,7 @@ async def startup(ctx):
 class WorkerSettings:
     """Arq worker definition. Referenced by `arq app.worker.config.WorkerSettings`."""
 
-    functions: ClassVar[list] = [translate_chapter_spike, review_docs_snapshot]
+    functions: ClassVar[list] = [translate_chapter_spike, review_docs_snapshot, evaluate_docs_experiment]
     on_startup = startup
     redis_settings = _redis_settings()
     max_jobs = 4

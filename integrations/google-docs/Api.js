@@ -128,3 +128,18 @@ function retryReviewRun_(binding) {
     "post",
   );
 }
+
+function lessonRequest_(binding, suffix, method, payload) {
+  return apiRequest_(
+    projectPath_(binding) + "/lessons" + suffix,
+    method,
+    payload,
+  );
+}
+function experimentRequest_(binding, suffix, method, payload) {
+  return apiRequest_(
+    projectPath_(binding) + "/experiments" + suffix,
+    method,
+    payload,
+  );
+}

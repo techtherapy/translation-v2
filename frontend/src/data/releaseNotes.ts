@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.0',
+    date: '2026-09-21',
+    highlights: [
+      'Google Docs review decisions can now become scoped lessons after a separate human confirmation, with examples and overlapping guidance shown for review',
+      'Added blinded comparisons on separate passages, with saved judgments and reports that distinguish missed issues, false alarms, review time, and unanswered questions',
+    ],
+  },
+  {
     version: '0.23.1',
     date: '2026-09-21',
     highlights: [
@@ -185,7 +193,7 @@ const releaseNotes: ReleaseNote[] = [
     date: '2026-04-01',
     highlights: [
       'New one-step translation flow — paste text, upload a file, or pick an existing source and start translating in a single action',
-      'Book or Article — when uploading a file, choose whether it\'s a book (multi-chapter) or article (single chapter)',
+      "Book or Article — when uploading a file, choose whether it's a book (multi-chapter) or article (single chapter)",
       'Remembers your language — the target language you used last is pre-selected next time',
     ],
   },
@@ -222,7 +230,7 @@ const releaseNotes: ReleaseNote[] = [
       'Track Changes upgraded — three modes: Off, Markup (show inline diffs), and Clean (hide markup)',
       'Accept All / Reject All buttons to resolve all changes in a chapter at once',
       'Previous/Next navigation to jump between changed segments with change count',
-      'Author-colored changes — each editor\'s changes shown in a distinct color',
+      "Author-colored changes — each editor's changes shown in a distinct color",
       'Usernames shown on tracked changes',
     ],
   },
@@ -301,9 +309,7 @@ const releaseNotes: ReleaseNote[] = [
   {
     version: '0.7.1',
     date: '2026-03-12',
-    highlights: [
-      'Rebranded to BITS — Buddha Intelligence Translation System',
-    ],
+    highlights: ['Rebranded to BITS — Buddha Intelligence Translation System'],
   },
   {
     version: '0.7.0',
@@ -338,7 +344,7 @@ const releaseNotes: ReleaseNote[] = [
     version: '0.5.0',
     date: '2026-03-06',
     highlights: [
-      'Each language can now have a reference language — set it in Settings > Languages (e.g. set Spanish\'s reference to English)',
+      "Each language can now have a reference language — set it in Settings > Languages (e.g. set Spanish's reference to English)",
       'When a reference language is configured, a read-only column appears in the glossary showing the reference translations alongside your working translations',
       'The reference column appears automatically between the source term and your editable translation — no manual setup needed each session',
     ],
@@ -368,9 +374,7 @@ const releaseNotes: ReleaseNote[] = [
   {
     version: '0.2.1',
     date: '2026-02-20',
-    highlights: [
-      'The "What\'s New" icon now pulses when there are unread release notes',
-    ],
+    highlights: ['The "What\'s New" icon now pulses when there are unread release notes'],
   },
   {
     version: '0.2.0',
@@ -380,7 +384,7 @@ const releaseNotes: ReleaseNote[] = [
       'Fixed "Translate All" timing out on large chapters — translations now save one-by-one and appear in real time while the batch is running',
       'You can now select text in the translation column and add it to the glossary — the Chinese source term is filled in automatically',
       'The glossary form now warns you if a term already exists before you create a duplicate',
-      'Added this Release Notes panel so you can see what\'s new',
+      "Added this Release Notes panel so you can see what's new",
     ],
   },
   {

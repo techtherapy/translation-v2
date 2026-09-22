@@ -16,10 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.docs_review import (
     DocsReviewDecision,
-    DocsReviewExperiment,
     DocsReviewItem,
-    DocsReviewLesson,
-    DocsReviewLessonConfirmation,
     DocsReviewProject,
     DocsReviewRun,
     DocsReviewSnapshot,
@@ -287,108 +284,18 @@ def lesson_content(lesson):
 
 
 async def propose_lesson(db, owner_id, project_id, request: LessonRequest):
-    project = await get_project(db, owner_id, project_id, lock=True)
-    payload = request.model_dump()
-    existing = await _retry(db, DocsReviewLesson, project_id, payload)
-    if existing is not None:
-        return existing
-    decision = await _nested(db, DocsReviewDecision, project_id, request.originating_decision_id)
-    if decision.disposition not in {"confirmed_issue", "corrected", "no_issue", "audit_found_issue"}:
-        raise HTTPException(409, "This decision cannot seed a reusable lesson")
-    if request.supersedes_id:
-        await _nested(db, DocsReviewLesson, project_id, request.supersedes_id)
-    # Persist exact decision/source/before/after in addition to reviewer-supplied rationale.
-    base = await _nested(db, DocsReviewSnapshot, project_id, decision.base_snapshot_id)
-    reviewed = await _nested(db, DocsReviewSnapshot, project_id, decision.reviewed_snapshot_id)
-    evidence = [
-        *deepcopy(request.evidence),
-        {
-            "decision": record_dict(decision),
-            "source_text": project.source_text,
-            "base_blocks": deepcopy(base.blocks),
-            "reviewed_blocks": deepcopy(reviewed.blocks),
-        },
-    ]
-    # Server timestamps are evidence values, serialized explicitly for portable JSON.
-    evidence[-1]["decision"]["created_at"] = decision.created_at.isoformat()
-    values = dict(
-        originating_decision_id=decision.id,
-        supersedes_id=request.supersedes_id,
-        source_language=project.source_language,
-        target_language=project.target_language,
-        scope=request.scope,
-        guidance=request.guidance,
-        evidence=evidence,
-    )
-    return await _insert(
-        db, DocsReviewLesson, {"project_id": project_id}, payload, content_hash=evidence_hash(values), **values
-    )
+    from app.services.docs_review.learning import propose_lesson as propose
+
+    return await propose(db, owner_id, project_id, request)
 
 
 async def confirm_lesson(db, owner_id, project_id, lesson_id, request: LessonConfirmationRequest):
-    await get_project(db, owner_id, project_id, lock=True)
-    payload = {**request.model_dump(), "lesson_id": lesson_id}
-    existing = await _retry(db, DocsReviewLessonConfirmation, project_id, payload)
-    lesson = await _nested(db, DocsReviewLesson, project_id, lesson_id)
-    if existing is not None:
-        return lesson
-    if request.expected_content_hash != lesson.content_hash or lesson.content_hash != evidence_hash(
-        lesson_content(lesson)
-    ):
-        raise HTTPException(409, "Lesson content changed; review it again before confirming")
-    if lesson.status != "proposed":
-        raise HTTPException(409, "Lesson is already confirmed")
-    async with db.begin_nested():
-        await _insert(
-            db,
-            DocsReviewLessonConfirmation,
-            {"project_id": project_id},
-            payload,
-            lesson_id=lesson.id,
-            confirmed_by=owner_id,
-            content_hash=lesson.content_hash,
-        )
-        lesson.status = "confirmed"
-        lesson.confirmed_by = owner_id
-        lesson.confirmed_at = datetime.now(UTC)
-        await db.flush()
-    return lesson
+    from app.services.docs_review.learning import confirm_lesson as confirm
+
+    return await confirm(db, owner_id, project_id, lesson_id, request)
 
 
 async def create_experiment(db, owner_id, project_id, request: ExperimentRequest):
-    project = await get_project(db, owner_id, project_id, lock=True)
-    payload = request.model_dump()
-    existing = await _retry(db, DocsReviewExperiment, project_id, payload)
-    if existing is not None:
-        return existing
-    lessons = []
-    for lesson_id in request.lesson_ids:
-        lesson = await _nested(db, DocsReviewLesson, project_id, lesson_id)
-        if lesson.status != "confirmed":
-            raise HTTPException(409, "Experiments require confirmed lessons")
-        lessons.append({"id": lesson.id, "content_hash": lesson.content_hash, **lesson_content(lesson)})
-    for example in request.evaluation_examples:
-        source = example.get("source_text")
-        if not isinstance(source, str) or not source.strip():
-            raise HTTPException(422, "Evaluation examples require source_text")
-        if (
-            source in project.source_text
-            or evidence_hash(example) in request.excluded_example_hashes
-            or text_hash(source) in request.excluded_example_hashes
-        ):
-            raise HTTPException(409, "Evaluation material overlaps excluded development evidence")
-    baseline = deepcopy(request.baseline_input)
-    candidate = deepcopy(request.candidate_input)
-    baseline["confirmed_lessons"] = []
-    candidate["confirmed_lessons"] = lessons
-    return await _insert(
-        db,
-        DocsReviewExperiment,
-        {"project_id": project_id},
-        payload,
-        baseline_input=baseline,
-        candidate_input=candidate,
-        lesson_ids=request.lesson_ids,
-        excluded_example_hashes=request.excluded_example_hashes,
-        evaluation_examples=request.evaluation_examples,
-    )
+    from app.services.docs_review.evaluation import create_experiment as create
+
+    return await create(db, owner_id, project_id, request)

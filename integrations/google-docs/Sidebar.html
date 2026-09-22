@@ -31,6 +31,9 @@
         border: 1px solid #9ea99d;
         background: #fffdf7;
       }
+      input[type="checkbox"] {
+        width: auto;
+      }
       button {
         background: #215a4a;
         color: white;
@@ -138,6 +141,47 @@
     <div id="chapterPreview"></div>
     <div id="decisionPreview"></div>
     <div id="cards"></div>
+    <div id="lessonPanel"></div>
+    <details>
+      <summary>Reopen a lesson</summary>
+      <label>Lesson ID<input id="lessonId" /></label
+      ><button id="openLesson">Read lesson</button>
+    </details>
+    <details>
+      <summary>Blinded baseline and candidate experiment</summary>
+      <p>
+        Uses the explicit model, guidance and limits above. The cost limit
+        covers both arms and optional generation together. Chapter 9 and all
+        reviewed lesson evidence are development material.
+      </p>
+      <label
+        >Confirmed lesson IDs to test (comma separated; blank returns to
+        baseline)<textarea id="experimentLessons"></textarea>
+      </label>
+      <label
+        >Separate source passage<textarea id="experimentSource"></textarea>
+      </label>
+      <label
+        >Supplied translation<textarea id="experimentTranslation"></textarea>
+      </label>
+      <label
+        >Additional development sources to exclude (one per line)<textarea
+          id="experimentExclusions"
+        ></textarea>
+      </label>
+      <label
+        ><input id="experimentDevelopment" type="checkbox" />Classify as
+        development; exclude from held-out results</label
+      >
+      <label
+        ><input id="experimentGenerate" type="checkbox" />Also compare
+        separately generated drafts</label
+      >
+      <button id="createExperiment">Freeze paired experiment</button>
+      <label>Existing experiment ID<input id="experimentId" /></label
+      ><button id="openExperiment">Read experiment</button>
+    </details>
+    <div id="experimentPanel"></div>
     <script>
       function appendText(parent, tag, text) {
         var node = document.createElement(tag);
@@ -168,7 +212,15 @@
         runner[name].apply(runner, args);
       }
       function clearReview() {
-        ["chapterPreview", "decisionPreview", "cards"].forEach(function (id) {
+        pauseReviewClocks();
+        activeReviewClocks = [];
+        [
+          "chapterPreview",
+          "decisionPreview",
+          "cards",
+          "lessonPanel",
+          "experimentPanel",
+        ].forEach(function (id) {
           document.getElementById(id).replaceChildren();
         });
       }
@@ -342,6 +394,7 @@
             );
             call("refreshReview", [], function (review) {
               renderReview(review);
+              renderLearningChoice(decision);
               status(
                 "Decision recorded for checkpoint " +
                   decision.reviewed_snapshot_id +
@@ -352,6 +405,660 @@
           });
         });
       }
+      function newActionId() {
+        return window.crypto.randomUUID();
+      }
+      function field(parent, label, value, tag) {
+        var input = appendText(
+          appendText(parent, "label", label),
+          tag || "textarea",
+          "",
+        );
+        input.value = value == null ? "" : value;
+        return input;
+      }
+      function renderLearningChoice(decision) {
+        var root = document.getElementById("lessonPanel");
+        root.replaceChildren();
+        appendText(root, "h2", "Local decision or reusable lesson");
+        appendText(
+          root,
+          "p",
+          "Your " +
+            decision.disposition +
+            " decision applies to this checkpoint. It has not confirmed any reusable guidance.",
+        );
+        button(root, "Keep this decision local", function () {
+          root.replaceChildren();
+          status(
+            "No reusable lesson was created. The local decision is retained.",
+          );
+        });
+        if (
+          [
+            "corrected",
+            "no_issue",
+            "confirmed_issue",
+            "audit_found_issue",
+          ].indexOf(decision.disposition) >= 0
+        ) {
+          button(root, "Propose scoped guidance", function () {
+            call("learningContext", [decision.id], function (context) {
+              lessonForm(
+                context.decision.id,
+                {
+                  source_language: context.source_language,
+                  target_language: context.target_language,
+                },
+                "",
+                null,
+              );
+            });
+          });
+        }
+      }
+      function lessonForm(decisionId, scope, guidance, supersedesId) {
+        var root = document.getElementById("lessonPanel");
+        root.replaceChildren();
+        appendText(
+          root,
+          "h2",
+          supersedesId
+            ? "Refine as a new proposed revision"
+            : "Propose a reusable lesson",
+        );
+        appendText(
+          root,
+          "p",
+          "No lesson activates automatically. Leave guidance empty if this feedback has no reusable lesson.",
+        );
+        var fields = {};
+        [
+          ["source_language", "Source language"],
+          ["target_language", "Target language"],
+          ["construction", "Construction or concept"],
+          ["positive_example", "Positive example with source"],
+          ["counterexample", "Counterexample with source"],
+          ["edition_restriction", "Edition restriction (blank means none)"],
+        ].forEach(function (entry) {
+          fields[entry[0]] = field(root, entry[1], scope[entry[0]]);
+        });
+        var text = field(root, "Proposed guidance", guidance);
+        var pending = null;
+        button(root, "Save proposal for review", function () {
+          var next = {};
+          Object.keys(fields).forEach(function (key) {
+            next[key] = fields[key].value;
+          });
+          next.edition_restriction = next.edition_restriction.trim() || null;
+          var content = { scope: next, guidance: text.value };
+          var fingerprint = JSON.stringify(content);
+          if (!pending || pending.fingerprint !== fingerprint)
+            pending = { fingerprint: fingerprint, id: newActionId() };
+          content.client_request_id = pending.id;
+          call(
+            "proposeReviewLesson",
+            [decisionId, content, supersedesId],
+            renderLesson,
+          );
+        });
+      }
+      function renderLesson(lesson) {
+        var root = document.getElementById("lessonPanel");
+        root.replaceChildren();
+        if (lesson.status === "no_reusable_lesson") {
+          appendText(
+            root,
+            "p",
+            "No reusable lesson. The review decision remains local.",
+          );
+          return;
+        }
+        appendText(
+          root,
+          "h2",
+          lesson.status === "confirmed"
+            ? "Confirmed experimental lesson"
+            : "Proposed reusable guidance",
+        );
+        appendText(root, "small", "Lesson ID: " + lesson.id);
+        appendText(root, "p", lesson.guidance);
+        Object.keys(lesson.scope).forEach(function (key) {
+          appendText(
+            root,
+            "p",
+            key.replace(/_/g, " ") +
+              ": " +
+              (lesson.scope[key] == null ? "None" : lesson.scope[key]),
+          );
+        });
+        appendText(root, "pre", "Exact content hash: " + lesson.content_hash);
+        appendText(
+          root,
+          "small",
+          "Only an explicitly selected experiment can use this lesson. Shared knowledge remains unchanged.",
+        );
+        var evidence = appendText(root, "details", "");
+        appendText(evidence, "summary", "Exact review evidence");
+        appendText(evidence, "pre", JSON.stringify(lesson.evidence, null, 2));
+        var resolutions = {};
+        lesson.conflicts.forEach(function (conflict) {
+          appendText(root, "h2", "Potential conflict: " + conflict.id);
+          appendText(root, "p", conflict.guidance);
+          appendText(root, "pre", JSON.stringify(conflict.scope, null, 2));
+          var input = field(
+            root,
+            "Explain how this overlapping guidance should be resolved",
+            "",
+          );
+          input.dataset.conflictId = conflict.id;
+          resolutions[conflict.id] = input;
+        });
+        if (!lesson.conflicts.length)
+          appendText(
+            root,
+            "p",
+            "No confirmed overlapping guidance in this project.",
+          );
+        button(root, "Refine in a new revision", function () {
+          lessonForm(
+            lesson.originating_decision_id,
+            lesson.scope,
+            lesson.guidance,
+            lesson.id,
+          );
+        });
+        if (lesson.status === "proposed") {
+          var requestId = null;
+          button(root, "Confirm experimental lesson", function () {
+            var notes = {};
+            Object.keys(resolutions).forEach(function (id) {
+              notes[id] = resolutions[id].value;
+            });
+            requestId = requestId || newActionId();
+            call(
+              "confirmReviewLesson",
+              [
+                lesson.id,
+                lesson.content_hash,
+                lesson.conflict_hash,
+                notes,
+                requestId,
+              ],
+              renderLesson,
+            );
+          });
+        }
+      }
+      var activeReviewClocks = [];
+      function createActiveReviewClock(now, idleLimit) {
+        var intervals = [],
+          started = null,
+          lastActivity = null;
+        function pause() {
+          if (started !== null) {
+            var end = Math.min(now(), lastActivity + idleLimit);
+            if (end > started)
+              intervals.push({ start: started, end: end, active: true });
+            started = null;
+          }
+        }
+        return {
+          start: function () {
+            if (started === null) {
+              started = now();
+              lastActivity = started;
+            }
+          },
+          touch: function () {
+            if (started !== null) {
+              if (now() - lastActivity > idleLimit) {
+                pause();
+                started = now();
+              }
+              lastActivity = now();
+            }
+          },
+          pause: pause,
+          intervals: function () {
+            pause();
+            return intervals.slice();
+          },
+        };
+      }
+      function pauseReviewClocks() {
+        activeReviewClocks.forEach(function (clock) {
+          clock.pause();
+        });
+      }
+      function renderExperiment(experiment) {
+        pauseReviewClocks();
+        activeReviewClocks = [];
+        var root = document.getElementById("experimentPanel");
+        root.replaceChildren();
+        document.getElementById("experimentId").value = experiment.id;
+        appendText(root, "h2", "Blinded experiment · " + experiment.status);
+        appendText(root, "small", "Experiment ID: " + experiment.id);
+        appendText(
+          root,
+          "p",
+          "Development material is excluded from independent evaluation. Similarity screening cannot establish semantic independence.",
+        );
+        if (
+          experiment.status === "ready" ||
+          experiment.status === "pending_enqueue"
+        )
+          button(root, "Run or retry queue delivery", function () {
+            call("runReviewExperiment", [experiment.id], renderExperiment);
+          });
+        button(root, "Refresh experiment", function () {
+          call("readReviewExperiment", [experiment.id], renderExperiment);
+        });
+        if (experiment.execution.error_code)
+          appendText(
+            root,
+            "p",
+            "Execution stopped: " +
+              experiment.execution.error_code +
+              ". Interrupted calls are never repeated automatically.",
+          );
+        experiment.examples.forEach(function (example) {
+          var card = appendText(root, "article", "");
+          appendText(card, "h2", example.id + " · " + example.classification);
+          appendText(card, "blockquote", example.source_text);
+          appendText(card, "blockquote", example.translated_text);
+          if (!example.reference_submitted) {
+            appendText(
+              card,
+              "p",
+              "Before seeing flags, compare source and translation. Submission attests that you can assess the source language.",
+            );
+            var issues = field(
+              card,
+              "Reference serious issues: one exact source quote | explanation per line; blank means none found",
+              "",
+            );
+            var note = field(card, "Source review note", "");
+            var complete = field(
+              card,
+              "Completed reference review",
+              "",
+              "input",
+            );
+            complete.type = "checkbox";
+            var id = null;
+            button(
+              card,
+              "Submit source-qualified reference review",
+              function () {
+                id = id || newActionId();
+                var records = issues.value
+                  .split("\n")
+                  .filter(function (line) {
+                    return line.trim();
+                  })
+                  .map(function (line, index) {
+                    var parts = line.split("|");
+                    return {
+                      id: "issue-" + (index + 1),
+                      source_quote: parts.shift().trim(),
+                      explanation: parts.join("|").trim(),
+                    };
+                  });
+                call(
+                  "submitExperimentLabel",
+                  [
+                    experiment.id,
+                    {
+                      client_request_id: id,
+                      example_id: example.id,
+                      phase: "reference",
+                      source_qualified: true,
+                      reference_complete: complete.checked === true,
+                      serious_issues: records,
+                      note: note.value,
+                    },
+                  ],
+                  renderExperiment,
+                );
+              },
+            );
+            return;
+          }
+          if (example.labels)
+            example.labels
+              .filter(function (label) {
+                return label.phase === "reference";
+              })
+              .forEach(function (label) {
+                appendText(
+                  card,
+                  "pre",
+                  "Independent reference issues: " +
+                    JSON.stringify(label.serious_issues, null, 2),
+                );
+              });
+          if (!example.outputs) {
+            appendText(
+              card,
+              "p",
+              "Reference retained. Arm outputs become available after successful execution.",
+            );
+            return;
+          }
+          if (example.arm_key)
+            appendText(
+              card,
+              "p",
+              "Judgment submitted. Arm identity: " +
+                JSON.stringify(example.arm_key),
+            );
+          var controls = {};
+          ["A", "B"].forEach(function (alias) {
+            var arm = appendText(card, "section", "");
+            appendText(arm, "h2", "Arm " + alias);
+            var output = example.outputs[alias];
+            var clock = createActiveReviewClock(function () {
+              return Date.now() / 1000;
+            }, 60);
+            activeReviewClocks.push(clock);
+            button(arm, "Start active review of " + alias, function () {
+              pauseReviewClocks();
+              clock.start();
+            });
+            button(arm, "Pause review of " + alias, function () {
+              clock.pause();
+            });
+            arm.addEventListener("pointerdown", function () {
+              clock.touch();
+            });
+            arm.addEventListener("keydown", function () {
+              clock.touch();
+            });
+            appendText(
+              arm,
+              "small",
+              "Pause when reading stops. Hidden time and inactivity beyond 60 seconds are excluded. Start again after returning.",
+            );
+            var flags = [];
+            output.assessment.findings.forEach(function (finding, index) {
+              appendText(arm, "p", finding.explanation);
+              appendText(
+                arm,
+                "pre",
+                JSON.stringify(
+                  {
+                    source: finding.source_spans,
+                    target: finding.target_spans,
+                  },
+                  null,
+                  2,
+                ),
+              );
+              var verdict = field(
+                arm,
+                "Flag " + (index + 1) + " judgment",
+                "",
+                "select",
+              );
+              [
+                ["unknown", "Unknown / not inspected"],
+                ["false_alarm", "False alarm"],
+                ["issue", "Source-confirmed issue"],
+              ].forEach(function (value) {
+                var option = appendText(verdict, "option", value[1]);
+                option.value = value[0];
+              });
+              var refs = field(
+                arm,
+                "Matching reference issue IDs (comma separated)",
+                "",
+              );
+              flags.push({ index: index, verdict: verdict, refs: refs });
+            });
+            var audits = [];
+            output.assessment.audit.selected_ids.forEach(function (blockId) {
+              var inspected = field(
+                arm,
+                "Inspected random audit: " + blockId,
+                "",
+                "input",
+              );
+              inspected.type = "checkbox";
+              var refs = field(
+                arm,
+                "Serious reference issues found by this audit (comma separated)",
+                "",
+              );
+              audits.push({ id: blockId, inspected: inspected, refs: refs });
+            });
+            var gen = null;
+            if (output.generation) {
+              appendText(arm, "h2", "Separate draft-generation outcome");
+              appendText(arm, "blockquote", output.generation.translated_text);
+              gen = field(
+                arm,
+                "Serious issues in generated draft (blank = unknown)",
+                "",
+                "input",
+              );
+              gen.type = "number";
+              gen.min = "0";
+            }
+            controls[alias] = {
+              clock: clock,
+              flags: flags,
+              audits: audits,
+              generation: gen,
+            };
+          });
+          if (!example.judgment_submitted) {
+            var judgmentNote = field(card, "Comparison note", "");
+            var requestId = null;
+            button(
+              card,
+              "Submit blinded judgment and reveal arms",
+              function () {
+                var arms = {};
+                function ids(value) {
+                  return value
+                    .split(",")
+                    .map(function (x) {
+                      return x.trim();
+                    })
+                    .filter(Boolean);
+                }
+                Object.keys(controls).forEach(function (alias) {
+                  var control = controls[alias];
+                  arms[alias] = {
+                    flags: control.flags
+                      .filter(function (f) {
+                        return f.verdict.value !== "unknown";
+                      })
+                      .map(function (f) {
+                        return {
+                          finding_index: f.index,
+                          false_alarm: f.verdict.value === "false_alarm",
+                          reference_issue_ids: ids(f.refs.value),
+                        };
+                      }),
+                    audits: control.audits
+                      .filter(function (a) {
+                        return a.inspected.checked;
+                      })
+                      .map(function (a) {
+                        return {
+                          block_id: a.id,
+                          serious_issue_ids: ids(a.refs.value),
+                        };
+                      }),
+                    review_intervals: control.clock.intervals(),
+                    generation: control.generation
+                      ? {
+                          serious_issue_count:
+                            control.generation.value === ""
+                              ? null
+                              : Number(control.generation.value),
+                          note: judgmentNote.value,
+                        }
+                      : null,
+                  };
+                });
+                requestId = requestId || newActionId();
+                call(
+                  "submitExperimentLabel",
+                  [
+                    experiment.id,
+                    {
+                      client_request_id: requestId,
+                      example_id: example.id,
+                      phase: "judgment",
+                      arms: arms,
+                      note: judgmentNote.value,
+                    },
+                  ],
+                  renderExperiment,
+                );
+              },
+            );
+          }
+        });
+        var reportId = null;
+        button(root, "Save a new report revision", function () {
+          reportId = reportId || newActionId();
+          call(
+            "appendExperimentReport",
+            [experiment.id, reportId],
+            renderExperiment,
+          );
+        });
+        experiment.reports.forEach(function (revision, index) {
+          var report = revision.report,
+            details = appendText(root, "details", "");
+          appendText(
+            details,
+            "summary",
+            "Report " +
+              (index + 1) +
+              " · " +
+              report.conclusion.replace(/_/g, " "),
+          );
+          appendText(
+            details,
+            "p",
+            "Labeled heldouts: " +
+              report.label_coverage.labeled_examples +
+              "/" +
+              report.label_coverage.heldout_examples +
+              "; unknown: " +
+              report.label_coverage.unknown_examples,
+          );
+          ["baseline", "candidate"].forEach(function (arm) {
+            var metrics = report.assessment[arm];
+            appendText(details, "h2", arm);
+            Object.keys(metrics).forEach(function (key) {
+              appendText(
+                details,
+                "p",
+                key.replace(/_/g, " ") +
+                  ": " +
+                  (metrics[key] == null ? "Unknown" : metrics[key]),
+              );
+            });
+            appendText(
+              details,
+              "p",
+              "Separate generation quality: " +
+                JSON.stringify(report.generation[arm]),
+            );
+          });
+          report.limitations.forEach(function (text) {
+            appendText(details, "small", text);
+          });
+        });
+      }
+      document
+        .getElementById("openLesson")
+        .addEventListener("click", function () {
+          call(
+            "readReviewLesson",
+            [document.getElementById("lessonId").value],
+            renderLesson,
+          );
+        });
+      document
+        .getElementById("openExperiment")
+        .addEventListener("click", function () {
+          call(
+            "readReviewExperiment",
+            [document.getElementById("experimentId").value],
+            renderExperiment,
+          );
+        });
+      var pendingExperiment = null;
+      document
+        .getElementById("createExperiment")
+        .addEventListener("click", function () {
+          var config = {
+            model: document.getElementById("liveModel").value,
+            limits: {
+              max_input_tokens: Number(
+                document.getElementById("liveInput").value,
+              ),
+              max_output_tokens: Number(
+                document.getElementById("liveOutput").value,
+              ),
+              max_cost_usd: Number(document.getElementById("liveCost").value),
+            },
+            guidance: [],
+            generate_draft:
+              document.getElementById("experimentGenerate").checked === true,
+            audit_count: 1,
+          };
+          var guidance = document.getElementById("liveGuidance").value.trim();
+          if (guidance)
+            config.guidance = [{ id: "supplied-guidance", content: guidance }];
+          var payload = {
+            lesson_ids: document
+              .getElementById("experimentLessons")
+              .value.split(",")
+              .map(function (s) {
+                return s.trim();
+              })
+              .filter(Boolean),
+            baseline_input: config,
+            candidate_input: config,
+            evaluation_examples: [
+              {
+                id: "passage-1",
+                source_text: document.getElementById("experimentSource").value,
+                translated_text: document.getElementById(
+                  "experimentTranslation",
+                ).value,
+                classification: document.getElementById("experimentDevelopment")
+                  .checked
+                  ? "development"
+                  : "heldout",
+              },
+            ],
+            excluded_example_hashes: [],
+            development_sources: document
+              .getElementById("experimentExclusions")
+              .value.split("\n")
+              .filter(function (s) {
+                return s.trim();
+              }),
+          };
+          var fingerprint = JSON.stringify(payload);
+          if (
+            !pendingExperiment ||
+            pendingExperiment.fingerprint !== fingerprint
+          )
+            pendingExperiment = { fingerprint: fingerprint, id: newActionId() };
+          payload.client_request_id = pendingExperiment.id;
+          call("createReviewExperiment", [payload], renderExperiment);
+        });
+
       function createReviewPoller(fetchStatus, onStatus, onError) {
         var timer = null,
           generation = 0,
@@ -410,12 +1117,17 @@
       );
       window.addEventListener("pagehide", function () {
         reviewPoller.stop();
+        pauseReviewClocks();
       });
       window.addEventListener("beforeunload", function () {
         reviewPoller.stop();
+        pauseReviewClocks();
       });
       document.addEventListener("visibilitychange", function () {
-        if (document.hidden) reviewPoller.stop();
+        if (document.hidden) {
+          reviewPoller.stop();
+          pauseReviewClocks();
+        }
       });
       document
         .getElementById("liveReview")

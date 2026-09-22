@@ -18,16 +18,21 @@ from app.models.docs_review import (
 )
 from app.schemas.docs_review import (
     DecisionRequest,
+    ExperimentJudgmentRequest,
     ExperimentRequest,
     LessonConfirmationRequest,
     LessonRequest,
     ProjectRequest,
+    ReferenceLabelRequest,
+    ReportRequest,
     RunRequest,
     SnapshotRequest,
 )
+from app.services.docs_review import evaluation
 from app.services.docs_review import repository as repo
 from app.services.docs_review.development_fixture import create_fixture_run, load_development_fixture
-from app.worker.docs_review import create_live_run, enqueue_run, reconcile_run
+from app.services.docs_review.learning import lesson_response
+from app.worker.docs_review import create_live_run, enqueue_experiment, enqueue_run, reconcile_experiment, reconcile_run
 
 
 async def enabled_user(user=Depends(get_current_user)):
@@ -127,12 +132,17 @@ async def get_decision(
 async def propose_lesson(
     project_id: str, request: LessonRequest, user=Depends(review_writer), db: AsyncSession = Depends(get_db)
 ):
-    return repo.record_dict(await repo.propose_lesson(db, user.id, project_id, request))
+    lesson = await repo.propose_lesson(db, user.id, project_id, request)
+    return (
+        await lesson_response(db, lesson)
+        if lesson
+        else {"status": "no_reusable_lesson", "originating_decision_id": request.originating_decision_id}
+    )
 
 
 @router.get("/projects/{project_id}/lessons/{lesson_id}")
 async def get_lesson(project_id: str, lesson_id: str, user=Depends(enabled_user), db: AsyncSession = Depends(get_db)):
-    return repo.record_dict(await repo.get_record(db, user.id, project_id, DocsReviewLesson, lesson_id))
+    return await lesson_response(db, await repo.get_record(db, user.id, project_id, DocsReviewLesson, lesson_id))
 
 
 @router.post("/projects/{project_id}/lessons/{lesson_id}/confirm")
@@ -143,18 +153,49 @@ async def confirm_lesson(
     user=Depends(review_writer),
     db: AsyncSession = Depends(get_db),
 ):
-    return repo.record_dict(await repo.confirm_lesson(db, user.id, project_id, lesson_id, request))
+    return await lesson_response(db, await repo.confirm_lesson(db, user.id, project_id, lesson_id, request))
 
 
 @router.post("/projects/{project_id}/experiments", status_code=201)
 async def create_experiment(
     project_id: str, request: ExperimentRequest, user=Depends(review_writer), db: AsyncSession = Depends(get_db)
 ):
-    return repo.record_dict(await repo.create_experiment(db, user.id, project_id, request))
+    return evaluation.public_experiment(await repo.create_experiment(db, user.id, project_id, request))
 
 
 @router.get("/projects/{project_id}/experiments/{experiment_id}")
 async def get_experiment(
     project_id: str, experiment_id: str, user=Depends(enabled_user), db: AsyncSession = Depends(get_db)
 ):
-    return repo.record_dict(await repo.get_record(db, user.id, project_id, DocsReviewExperiment, experiment_id))
+    experiment = await repo.get_record(db, user.id, project_id, DocsReviewExperiment, experiment_id)
+    return evaluation.public_experiment(await reconcile_experiment(db, experiment))
+
+
+@router.post("/projects/{project_id}/experiments/{experiment_id}/run")
+async def run_experiment(
+    project_id: str, experiment_id: str, user=Depends(review_writer), db: AsyncSession = Depends(get_db)
+):
+    experiment = await repo.get_record(db, user.id, project_id, DocsReviewExperiment, experiment_id)
+    return evaluation.public_experiment(await enqueue_experiment(db, experiment))
+
+
+@router.post("/projects/{project_id}/experiments/{experiment_id}/labels", status_code=201)
+async def append_experiment_label(
+    project_id: str,
+    experiment_id: str,
+    request: ReferenceLabelRequest | ExperimentJudgmentRequest,
+    user=Depends(review_writer),
+    db: AsyncSession = Depends(get_db),
+):
+    return await evaluation.append_label(db, user.id, project_id, experiment_id, request)
+
+
+@router.post("/projects/{project_id}/experiments/{experiment_id}/reports", status_code=201)
+async def append_experiment_report(
+    project_id: str,
+    experiment_id: str,
+    request: ReportRequest,
+    user=Depends(review_writer),
+    db: AsyncSession = Depends(get_db),
+):
+    return await evaluation.append_report(db, user.id, project_id, experiment_id, request)

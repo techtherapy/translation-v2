@@ -371,3 +371,181 @@ async def review_docs_snapshot(ctx, run_id):
             await db.commit()
             await db.refresh(stored)
         return stored_result(stored)
+
+
+async def lock_experiment_job(db, experiment_id):
+    from app.models.docs_review import DocsReviewExperiment, DocsReviewProject
+    from app.services.docs_review.evaluation import locked_experiment
+
+    experiment = await db.get(DocsReviewExperiment, experiment_id)
+    if experiment is None:
+        return None
+    project = await db.get(DocsReviewProject, experiment.project_id)
+    return await locked_experiment(db, project.owner_user_id, project.id, experiment_id)
+
+
+def experiment_state(experiment):
+    return {"experiment_id": experiment.id, "status": experiment.report["execution"]["status"]}
+
+
+def set_execution(experiment, **changes):
+    experiment.report = {**experiment.report, "execution": {**experiment.report["execution"], **changes}}
+
+
+async def reconcile_experiment(db, experiment):
+    experiment = await lock_experiment_job(db, experiment.id)
+    state = experiment.report["execution"]
+    deadline = state.get("lease_expires_at")
+    if deadline and datetime.fromisoformat(deadline) <= datetime.now(UTC):
+        if state["status"] == "running":
+            set_execution(
+                experiment, status="interrupted", error_code="provider_completion_unknown", lease_expires_at=None
+            )
+        elif state["status"] == "queued":
+            set_execution(
+                experiment, status="pending_enqueue", error_code="queue_confirmation_expired", lease_expires_at=None
+            )
+    await db.commit()
+    return experiment
+
+
+async def enqueue_experiment(db, experiment, *, queue=None):
+    if not get_settings().docs_review_live_ai:
+        raise HTTPException(409, "Live experiments are disabled")
+    experiment = await reconcile_experiment(db, experiment)
+    experiment = await lock_experiment_job(db, experiment.id)
+    state = experiment.report["execution"]["status"]
+    if state not in {"ready", "pending_enqueue"}:
+        await db.commit()
+        return experiment
+    set_execution(experiment, status="pending_enqueue")
+    await db.commit()
+    own_queue = queue is None
+    job, error = None, None
+    try:
+        queue = queue or await create_queue()
+        job_id = "docs-experiment:" + experiment.id
+        job = await queue.enqueue_job("evaluate_docs_experiment", experiment.id, _job_id=job_id)
+        if job is None and await queue.exists(result_key_prefix + job_id):
+            await queue.delete(result_key_prefix + job_id)
+            job = await queue.enqueue_job("evaluate_docs_experiment", experiment.id, _job_id=job_id)
+    except Exception:
+        error = "queue_unavailable"
+    finally:
+        if own_queue and queue is not None:
+            await queue.aclose()
+    experiment = await lock_experiment_job(db, experiment.id)
+    if experiment.report["execution"]["status"] == "pending_enqueue":
+        set_execution(
+            experiment,
+            status="queued" if job is not None else "pending_enqueue",
+            error_code=error or (None if job is not None else "queue_delivery_unconfirmed"),
+            lease_expires_at=(datetime.now(UTC) + timedelta(seconds=QUEUE_WAIT_SECONDS)).isoformat()
+            if job is not None
+            else None,
+        )
+    await db.commit()
+    return experiment
+
+
+async def evaluate_docs_experiment(ctx, experiment_id):
+    from app.services.docs_review.evaluation import compare_configurations, validate_current_holdout
+
+    factory = ctx.get("session_factory", async_session)
+    async with factory() as db:
+        experiment = await lock_experiment_job(db, experiment_id)
+        if experiment is None:
+            return {"experiment_id": experiment_id, "status": "not_found"}
+        await reconcile_experiment(db, experiment)
+        experiment = await lock_experiment_job(db, experiment_id)
+        if experiment.report["execution"]["status"] not in {"queued", "pending_enqueue"}:
+            await db.commit()
+            return experiment_state(experiment)
+        calls = experiment.baseline_input["calls"] + experiment.candidate_input["calls"]
+        try:
+            await validate_current_holdout(db, experiment)
+            reserved = sum(preflight(call["input"]) for call in calls)
+            if reserved > experiment.baseline_input["configuration"]["limits"]["max_cost_usd"]:
+                raise AssessmentError("experiment_cost_limit_exceeded")
+            cap = min(call["input"]["account_spend_limit_usd"] for call in calls)
+            await reserve_pilot_budget(db, reserved, cap)
+        except AssessmentError as exc:
+            set_execution(experiment, status="failed", error_code=exc.code, provider_calls=0, lease_expires_at=None)
+            await db.commit()
+            return experiment_state(experiment)
+        lease = secrets.token_hex(16)
+        deadline = datetime.now(UTC) + timedelta(
+            seconds=sum(c["input"]["completion_options"]["timeout"] for c in calls) + 60
+        )
+        set_execution(
+            experiment,
+            status="running",
+            error_code=None,
+            lease_token=lease,
+            lease_expires_at=deadline.isoformat(),
+            reserved_cost_usd=reserved,
+            reserved_call_count=len(calls),
+            provider_calls=0,
+        )
+        await db.commit()
+        # Detached, deep-frozen call data; no transaction spans a provider request.
+        frozen = experiment
+
+    async def before_call(arm, call):
+        async with factory() as db:
+            current = await lock_experiment_job(db, experiment_id)
+            await reconcile_experiment(db, current)
+            current = await lock_experiment_job(db, experiment_id)
+            execution = current.report["execution"]
+            if execution["status"] != "running" or execution.get("lease_token") != lease:
+                await db.commit()
+                raise AssessmentError("provider_completion_unknown", ambiguous=True)
+            marker = dict(
+                arm=arm,
+                example_id=call["example_id"],
+                outcome=call["outcome"],
+                started_at=datetime.now(UTC).isoformat(),
+            )
+            set_execution(
+                current,
+                provider_calls=execution["provider_calls"] + 1,
+                started_calls=[*execution.get("started_calls", []), marker],
+            )
+            await db.commit()
+
+    async def save_output(arm, output):
+        async with factory() as db:
+            current = await lock_experiment_job(db, experiment_id)
+            await reconcile_experiment(db, current)
+            current = await lock_experiment_job(db, experiment_id)
+            execution = current.report["execution"]
+            active = execution["status"] == "running" and execution.get("lease_token") == lease
+            field = arm + "_outputs"
+            saved = deepcopy(output)
+            if not active:
+                saved["late_response"] = True
+            setattr(current, field, [*getattr(current, field), saved])
+            await db.commit()
+            if not active:
+                raise AssessmentError("provider_completion_unknown", ambiguous=True)
+
+    status, error = "succeeded", None
+    try:
+        await compare_configurations(
+            frozen, ctx.get("completion_client"), save_output=save_output, before_call=before_call
+        )
+    except AssessmentError as exc:
+        status, error = ("interrupted" if exc.ambiguous else "failed"), exc.code
+    except asyncio.CancelledError:
+        status, error = "interrupted", "provider_completion_unknown"
+    async with factory() as db:
+        current = await lock_experiment_job(db, experiment_id)
+        await reconcile_experiment(db, current)
+        current = await lock_experiment_job(db, experiment_id)
+        if (
+            current.report["execution"]["status"] == "running"
+            and current.report["execution"].get("lease_token") == lease
+        ):
+            set_execution(current, status=status, error_code=error, lease_expires_at=None)
+        await db.commit()
+        return experiment_state(current)

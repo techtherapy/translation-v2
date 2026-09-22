@@ -231,7 +231,14 @@ async def test_lessons_freeze_confirmation_and_experiment_inputs(client, admin_t
     payload = dict(
         client_request_id="lesson-1",
         originating_decision_id=d["id"],
-        scope={"term": "本尊"},
+        scope=dict(
+            source_language="zh",
+            target_language="en",
+            construction="本尊",
+            positive_example="本尊 — yidam",
+            counterexample="神祇 — deity",
+            edition_restriction=None,
+        ),
         guidance="Keep yidam",
         evidence=[{"source": "本尊", "target": "Yidam"}],
     )
@@ -257,17 +264,26 @@ async def test_lessons_freeze_confirmation_and_experiment_inputs(client, admin_t
     )
     assert revision.status_code == 201
     assert revision.json()["id"] != lesson["id"]
+    configuration = dict(
+        model="anthropic/test-model", limits=dict(max_input_tokens=20000, max_output_tokens=2000, max_cost_usd=0.1)
+    )
     experiment = dict(
         client_request_id="experiment-1",
         lesson_ids=[lesson["id"]],
-        evaluation_examples=[{"source_text": "另一章", "translated_text": "Another chapter"}],
-        baseline_input={"prompt": "baseline"},
-        candidate_input={"prompt": "baseline"},
+        evaluation_examples=[
+            {"id": "holdout", "source_text": "山間秋雨滋潤松林。", "translated_text": "Rain nourishes the pines."}
+        ],
+        baseline_input=configuration,
+        candidate_input=configuration,
         excluded_example_hashes=[],
     )
     e = await client.post(root + "/experiments", json=experiment, headers=headers(admin_token))
     assert e.status_code == 201, e.text
-    assert e.json()["candidate_input"]["confirmed_lessons"][0]["guidance"] == "Keep yidam"
+    from app.models.docs_review import DocsReviewExperiment
+
+    persisted = await db_session.get(DocsReviewExperiment, e.json()["id"])
+    assert persisted.candidate_input["confirmed_lessons"][0]["guidance"] == "Keep yidam"
+    assert "candidate_input" not in e.json()  # Hidden until this example is judged.
     assert (await client.post(root + "/experiments", json=experiment, headers=headers(admin_token))).json()[
         "id"
     ] == e.json()["id"]
@@ -627,7 +643,14 @@ async def test_confirmation_races_do_not_change_frozen_timestamp(
     request = dict(
         client_request_id="lesson",
         originating_decision_id=decision["id"],
-        scope={},
+        scope=dict(
+            source_language="zh",
+            target_language="en",
+            construction="本尊",
+            positive_example="本尊 — yidam",
+            counterexample="神祇 — deity",
+            edition_restriction=None,
+        ),
         guidance="Test lesson",
         evidence=[],
     )

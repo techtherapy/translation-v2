@@ -517,3 +517,74 @@ function recordDecision(nonce) {
   // This event certifies only reviewedId. It cannot certify later typing.
   return decision;
 }
+
+function learningContext(decisionId) {
+  var binding = binding_();
+  var decision = apiRequest_(
+    projectPath_(binding) + "/decisions/" + decisionId,
+    "get",
+  );
+  var project = apiRequest_(projectPath_(binding), "get");
+  return {
+    decision: decision,
+    source_language: project.source_language,
+    target_language: project.target_language,
+  };
+}
+function proposeReviewLesson(decisionId, proposal, supersedesId) {
+  return lessonRequest_(binding_(), "", "post", {
+    client_request_id: proposal.client_request_id,
+    originating_decision_id: decisionId,
+    supersedes_id: supersedesId || null,
+    scope: proposal.scope,
+    guidance: proposal.guidance,
+    evidence: [],
+  });
+}
+function readReviewLesson(lessonId) {
+  return lessonRequest_(binding_(), "/" + lessonId, "get");
+}
+function confirmReviewLesson(
+  lessonId,
+  expectedHash,
+  conflictHash,
+  resolutions,
+  requestId,
+) {
+  var binding = binding_();
+  var latest = lessonRequest_(binding, "/" + lessonId, "get");
+  if (
+    latest.content_hash !== expectedHash ||
+    latest.conflict_hash !== conflictHash
+  )
+    throw new Error(
+      "Lesson or conflicts changed. Read the proposal again before confirming.",
+    );
+  return lessonRequest_(binding, "/" + lessonId + "/confirm", "post", {
+    client_request_id: requestId,
+    expected_content_hash: expectedHash,
+    expected_conflict_hash: conflictHash,
+    conflict_resolutions: resolutions,
+  });
+}
+function createReviewExperiment(payload) {
+  return experimentRequest_(binding_(), "", "post", payload);
+}
+function readReviewExperiment(experimentId) {
+  return experimentRequest_(binding_(), "/" + experimentId, "get");
+}
+function runReviewExperiment(experimentId) {
+  return experimentRequest_(binding_(), "/" + experimentId + "/run", "post");
+}
+function submitExperimentLabel(experimentId, label) {
+  var binding = binding_();
+  experimentRequest_(binding, "/" + experimentId + "/labels", "post", label);
+  return experimentRequest_(binding, "/" + experimentId, "get");
+}
+function appendExperimentReport(experimentId, requestId) {
+  var binding = binding_();
+  experimentRequest_(binding, "/" + experimentId + "/reports", "post", {
+    client_request_id: requestId,
+  });
+  return experimentRequest_(binding, "/" + experimentId, "get");
+}
