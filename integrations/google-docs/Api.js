@@ -70,19 +70,23 @@ function apiRequest_(path, method, payload, loginRequest) {
   }
   // Do not reflect provider responses or transport errors: they may contain secrets.
   if (status < 200 || status >= 300) {
+    var message =
+      "BITS request failed (" + status + "). Retry or ask the maintainer.";
     if (status === 403)
-      throw new Error("Your BITS account cannot perform this review action.");
+      message = "Your BITS account cannot perform this review action.";
     if (status === 404)
-      throw new Error(
-        "Review unavailable: check feature access and project ownership.",
-      );
+      message =
+        "Review unavailable: check feature access and project ownership.";
     if (status === 409)
-      throw new Error(
-        "The review checkpoint conflicts with this action. Refresh; example findings require the supplied chapter.",
-      );
-    throw new Error(
-      "BITS request failed (" + status + "). Retry or ask the maintainer.",
-    );
+      message =
+        "The review checkpoint conflicts with this action. Refresh; example findings require the supplied chapter.";
+    if (status === 422)
+      message =
+        "BITS rejected this request. Check the model and limits, then start again.";
+    var error = new Error(message);
+    error.requestRejected =
+      [400, 403, 404, 405, 409, 422, 429].indexOf(status) >= 0;
+    throw error;
   }
   try {
     return JSON.parse(response.getContentText());

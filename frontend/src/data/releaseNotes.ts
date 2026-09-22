@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.23.1',
+    date: '2026-09-21',
+    highlights: [
+      'Fixed review retries that could remain stuck after an earlier attempt failed',
+      'Corrected review limits can now be submitted again, and waiting reviews keep all of their original AI settings',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-09-21',
     highlights: [

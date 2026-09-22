@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from arq import create_pool
 from arq.connections import RedisSettings
+from arq.constants import result_key_prefix
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
@@ -18,7 +19,7 @@ from app.core.database import async_session
 from app.models.docs_review import DocsReviewItem, DocsReviewRun, DocsReviewSnapshot
 from app.models.setting import Setting
 from app.services.docs_review import repository as repo
-from app.services.docs_review.assessment import CALL_TIMEOUT_SECONDS, AssessmentError, assess_snapshot
+from app.services.docs_review.assessment import AssessmentError, assess_snapshot, freeze_completion_options
 from app.services.docs_review.prompts import PROMPT_VERSION, build_messages
 from app.services.docs_review.sampling import select_audit
 from app.services.translation.llm import _ensure_provider_prefix
@@ -35,6 +36,8 @@ QUEUE_WAIT_SECONDS = 300
 def preflight(bundle):
     """Reserve the configured maxima, not an optimistic expected response length."""
     settings = get_settings()
+    if "completion_options" not in bundle:
+        raise AssessmentError("completion_options_missing")
     if not settings.docs_review_enabled or not settings.docs_review_live_ai:
         raise AssessmentError("live_review_disabled")
     if not bundle["model"] or bundle["provider"] not in PROVIDER_KEYS:
@@ -136,7 +139,14 @@ async def enqueue_run(db, run, *, queue=None):
     own_queue = queue is None
     try:
         queue = queue or await create_queue()
-        await queue.enqueue_job("review_docs_snapshot", run.id, _job_id="docs-review:" + run.id)
+        job_id = "docs-review:" + run.id
+        job = await queue.enqueue_job("review_docs_snapshot", run.id, _job_id=job_id)
+        if job is None and await queue.exists(result_key_prefix + job_id):
+            # A pre-lease failure can leave a retained ARQ result while the DB run
+            # is still retryable. The DB owns completion evidence, so evict only
+            # this redundant terminal cache entry and retry the same job ID.
+            await queue.delete(result_key_prefix + job_id)
+            job = await queue.enqueue_job("review_docs_snapshot", run.id, _job_id=job_id)
     except Exception:
         # A dispatch could have reached Redis despite a lost response. Worker acquisition
         # is conditional, so retrying this deterministic ID cannot cause another call.
@@ -157,9 +167,11 @@ async def enqueue_run(db, run, *, queue=None):
                 DocsReviewRun.status == "pending_enqueue",
             )
             .values(
-                status="queued",
-                error_code=None,
-                lease_expires_at=datetime.now(UTC) + timedelta(seconds=QUEUE_WAIT_SECONDS),
+                status="queued" if job is not None else "pending_enqueue",
+                error_code=None if job is not None else "queue_delivery_unconfirmed",
+                lease_expires_at=(datetime.now(UTC) + timedelta(seconds=QUEUE_WAIT_SECONDS))
+                if job is not None
+                else None,
             )
             .execution_options(synchronize_session=False)
         )
@@ -203,6 +215,7 @@ async def create_live_run(db, owner_id, project_id, request, *, queue=None):
         account_spend_limit_usd=get_settings().docs_review_account_spend_limit_usd,
     )
     bundle["messages"] = build_messages(bundle)
+    bundle["completion_options"] = freeze_completion_options(bundle)
     run = await repo.create_run(db, owner_id, project_id, request, input_bundle=bundle)
     try:
         preflight(bundle)
@@ -243,7 +256,7 @@ async def review_docs_snapshot(ctx, run_id):
             await db.commit()
             await db.refresh(run)
             return stored_result(run)
-        lease = datetime.now(UTC) + timedelta(seconds=CALL_TIMEOUT_SECONDS + 60)
+        lease = datetime.now(UTC) + timedelta(seconds=run.input_bundle["completion_options"]["timeout"] + 60)
         usage = {"reserved_cost_usd": reserved, "provider_calls": 1}
         acquired = await db.execute(
             update(DocsReviewRun)

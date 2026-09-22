@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from copy import deepcopy
 
 import litellm
 from pydantic import ValidationError
@@ -9,7 +10,20 @@ from pydantic import ValidationError
 from app.schemas.docs_review import LiveReviewAssessment
 from app.services.docs_review.evidence import validate_assessment_evidence
 
-CALL_TIMEOUT_SECONDS = 120
+# Selected once, at run creation. Nulls explicitly retain provider omission semantics.
+COMPLETION_DEFAULTS = {
+    "response_format": {"type": "json_object"},
+    "num_retries": 0,
+    "timeout": 120,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "n": 1,
+    "stream": False,
+    "stop": None,
+    "seed": None,
+    "presence_penalty": None,
+    "frequency_penalty": None,
+}
 litellm.telemetry = False
 
 
@@ -22,23 +36,23 @@ class AssessmentError(Exception):
         self.ambiguous = ambiguous
 
 
+def freeze_completion_options(bundle):
+    return {
+        **deepcopy(COMPLETION_DEFAULTS),
+        "model": bundle["model"],
+        "messages": deepcopy(bundle["messages"]),
+        "max_completion_tokens": bundle["limits"]["max_output_tokens"] if bundle["limits"] else None,
+    }
+
+
 async def assess_snapshot(input_bundle, completion_client=None):
     """Use the frozen prompt/model. Never repair, clean, or retry provider output."""
     client = completion_client or litellm.acompletion
     raw = None
     usage = {"provider_calls": 1}
+    options = deepcopy(input_bundle["completion_options"])
     try:
-        response = await asyncio.wait_for(
-            client(
-                model=input_bundle["model"],
-                messages=input_bundle["messages"],
-                max_completion_tokens=input_bundle["limits"]["max_output_tokens"],
-                response_format={"type": "json_object"},
-                num_retries=0,
-                timeout=CALL_TIMEOUT_SECONDS,
-            ),
-            timeout=CALL_TIMEOUT_SECONDS,
-        )
+        response = await asyncio.wait_for(client(**options), timeout=options["timeout"])
     except Exception as exc:
         # No response is not proof that the provider did not charge or finish.
         usage["provider_error_type"] = type(exc).__name__

@@ -176,6 +176,20 @@ function startLiveReview(options) {
       throw new Error(
         "Live review guidance is too large. Shorten it before starting a new checkpoint.",
       );
+    var limits = options.limits;
+    if (
+      !limits ||
+      !Number.isInteger(limits.max_input_tokens) ||
+      limits.max_input_tokens <= 0 ||
+      !Number.isInteger(limits.max_output_tokens) ||
+      limits.max_output_tokens <= 0 ||
+      typeof limits.max_cost_usd !== "number" ||
+      !Number.isFinite(limits.max_cost_usd) ||
+      limits.max_cost_usd <= 0
+    )
+      throw new Error(
+        "Review limits must use positive whole token counts and a positive cost limit.",
+      );
     var current = readCheckpoint_(binding);
     var blocks = current.blocks.map(function (block) {
       return {
@@ -208,11 +222,23 @@ function startLiveReview(options) {
     delete binding.itemAnchorRunId;
     saveBinding_(binding);
   }
-  var run = apiRequest_(
-    projectPath_(binding) + "/runs",
-    "post",
-    binding.pendingRunRequest,
-  );
+  var run;
+  try {
+    run = apiRequest_(
+      projectPath_(binding) + "/runs",
+      "post",
+      binding.pendingRunRequest,
+    );
+  } catch (error) {
+    // A definitive rejection created no run. Let corrected options start a new
+    // action; only uncertain transport/server outcomes retain the frozen request.
+    // HTTP 401 already signs out and removes the binding in the transport layer.
+    if (error.requestRejected) {
+      delete binding.pendingRunRequest;
+      saveBinding_(binding);
+    }
+    throw error;
+  }
   binding.runId = run.id;
   delete binding.pendingRunRequest;
   saveBinding_(binding);

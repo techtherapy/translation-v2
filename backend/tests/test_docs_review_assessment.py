@@ -28,6 +28,26 @@ def bundle():
     }
 
 
+def freeze_test_request(inputs):
+    # Literal request evidence, independent of the production default builder.
+    inputs["completion_options"] = {
+        "model": inputs["model"],
+        "messages": copy.deepcopy(inputs["messages"]),
+        "max_completion_tokens": 2000,
+        "response_format": {"type": "json_object"},
+        "num_retries": 0,
+        "timeout": 120,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "n": 1,
+        "stream": False,
+        "stop": None,
+        "seed": None,
+        "presence_penalty": None,
+        "frequency_penalty": None,
+    }
+
+
 def assessment():
     return {
         "schema_version": 1,
@@ -76,6 +96,7 @@ async def test_valid_multiblock_finding_uses_full_chapter_and_separate_guidance(
 
     inputs = bundle()
     inputs["messages"] = build_messages(inputs)
+    freeze_test_request(inputs)
     before = copy.deepcopy(inputs)
     calls = []
 
@@ -109,6 +130,7 @@ async def test_failure_preserves_private_evidence_without_partial_findings(probl
 
     inputs = bundle()
     inputs["messages"] = build_messages(inputs)
+    freeze_test_request(inputs)
     value = assessment()
     if problem == "quote":
         value["findings"][0]["source_spans"][0]["quote"] = "invented"
@@ -141,6 +163,7 @@ async def test_nontext_provider_content_is_preserved_privately_but_rejected():
 
     inputs = bundle()
     inputs["messages"] = build_messages(inputs)
+    freeze_test_request(inputs)
 
     async def fake(**kwargs):
         return response(raw={"unusable": "provider object"})

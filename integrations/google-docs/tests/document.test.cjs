@@ -792,3 +792,154 @@ test("pending live request refuses oversized guidance before creating a new chec
   );
   assert.equal(reads, 0);
 });
+
+test("zero live limits create no checkpoint and corrected limits can start", () => {
+  const c = load({
+    Utilities: {
+      newBlob: (value) => ({ getBytes: () => [...Buffer.from(value)] }),
+      getUuid: () => "request-id",
+    },
+  });
+  const binding = { projectId: "p" };
+  let reads = 0;
+  const posts = [];
+  c.binding_ = () => binding;
+  c.readCheckpoint_ = () => {
+    reads++;
+    return { revisionId: "r", blocks: [{ text: "text", kind: "paragraph" }] };
+  };
+  c.createBlockAnchors_ = () => ["anchor"];
+  c.saveBinding_ = () => {};
+  c.refreshReview = () => ({ status: "queued" });
+  c.apiRequest_ = (path, method, payload) => {
+    posts.push({ path, payload: JSON.parse(JSON.stringify(payload)) });
+    return { id: path.endsWith("/snapshots") ? "snapshot" : "run" };
+  };
+  const options = {
+    model: "anthropic/test",
+    limits: { max_input_tokens: 0, max_output_tokens: 2000, max_cost_usd: 0.1 },
+  };
+  assert.throws(() => c.startLiveReview(options), /limits|positive|tokens/i);
+  assert.equal(reads, 0);
+  assert.equal(posts.length, 0);
+  assert.equal(binding.pendingRunRequest, undefined);
+  options.limits.max_input_tokens = 20000;
+  assert.equal(c.startLiveReview(options).status, "queued");
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1].payload.limits.max_input_tokens, 20000);
+});
+
+test("definitive 422 rejects and releases a frozen submission so corrected options are used", () => {
+  let reject = true;
+  const sent = [];
+  const c = load({
+    Utilities: {
+      newBlob: (value) => ({ getBytes: () => [...Buffer.from(value)] }),
+      getUuid: () => "new-request",
+    },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        const body = options.payload ? JSON.parse(options.payload) : undefined;
+        sent.push({ url, body });
+        return {
+          getResponseCode: () => (reject ? 422 : 201),
+          getContentText: () =>
+            JSON.stringify({
+              id: url.endsWith("/snapshots") ? "new-snapshot" : "new-run",
+            }),
+        };
+      },
+    },
+  });
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "..", "Api.js"), "utf8"),
+    c,
+  );
+  c.userToken_ = () => "fake-token";
+  const binding = {
+    projectId: "p",
+    baseId: "old-snapshot",
+    pendingRunRequest: {
+      client_request_id: "rejected",
+      snapshot_id: "old-snapshot",
+      mode: "live",
+      model: "anthropic/test",
+      limits: {
+        max_input_tokens: 0,
+        max_output_tokens: 2000,
+        max_cost_usd: 0.1,
+      },
+    },
+  };
+  c.binding_ = () => binding;
+  c.saveBinding_ = () => {};
+  c.readCheckpoint_ = () => ({
+    revisionId: "r",
+    blocks: [{ text: "text", kind: "paragraph" }],
+  });
+  c.createBlockAnchors_ = () => ["anchor"];
+  c.refreshReview = () => ({ status: "queued" });
+  const corrected = {
+    model: "anthropic/test",
+    limits: {
+      max_input_tokens: 20000,
+      max_output_tokens: 2000,
+      max_cost_usd: 0.1,
+    },
+  };
+  assert.throws(() => c.startLiveReview(corrected), /422|rejected|request/i);
+  assert.equal(binding.pendingRunRequest, undefined);
+  reject = false;
+  assert.equal(c.startLiveReview(corrected).status, "queued");
+  assert.equal(sent.at(-1).body.client_request_id, "new-request");
+  assert.equal(sent.at(-1).body.limits.max_input_tokens, 20000);
+});
+
+test("uncertain HTTP outcomes keep the identical frozen run request", () => {
+  for (const httpStatus of [408, 500, 200]) {
+    let rejected = true;
+    const posts = [];
+    const c = load({
+      UrlFetchApp: {
+        fetch: (_url, options) => {
+          posts.push(JSON.parse(options.payload));
+          return {
+            getResponseCode: () => (rejected ? httpStatus : 201),
+            getContentText: () =>
+              rejected ? "unreadable response" : JSON.stringify({ id: "run" }),
+          };
+        },
+      },
+    });
+    vm.runInContext(
+      fs.readFileSync(path.join(__dirname, "..", "Api.js"), "utf8"),
+      c,
+    );
+    c.userToken_ = () => "fake-token";
+    const original = {
+      client_request_id: "frozen",
+      snapshot_id: "base",
+      mode: "live",
+      model: "anthropic/test",
+      limits: {
+        max_input_tokens: 20000,
+        max_output_tokens: 2000,
+        max_cost_usd: 0.1,
+      },
+    };
+    const binding = {
+      projectId: "p",
+      baseId: "base",
+      pendingRunRequest: original,
+    };
+    c.binding_ = () => binding;
+    c.saveBinding_ = () => {};
+    c.refreshReview = () => ({ status: "queued" });
+    assert.throws(() => c.startLiveReview({}));
+    assert.equal(binding.pendingRunRequest, original);
+    rejected = false;
+    c.startLiveReview({ model: "changed-must-not-apply" });
+    assert.deepEqual(posts, [original, original]);
+    assert.equal(binding.pendingRunRequest, undefined);
+  }
+});

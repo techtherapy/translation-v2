@@ -522,3 +522,131 @@ async def test_fixture_request_identity_does_not_change_when_live_guidance_is_ad
     retried = await repo.create_run(db_session, owner, project.id, RunRequest(**old_payload), input_bundle={})
     assert retried.id == old_run.id
     assert retried.input_bundle["request"] == old_payload
+
+
+async def test_retry_removes_retained_arq_result_and_actually_enqueues(db_session, project_snapshot):
+    from arq.constants import result_key_prefix
+
+    from app.worker.docs_review import enqueue_run
+
+    run = await start(db_session, project_snapshot)
+    run.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await db_session.commit()
+    job_id = "docs-review:" + run.id
+
+    class RetainedResultQueue(FakeQueue):
+        def __init__(self):
+            super().__init__()
+            self.keys = {result_key_prefix + job_id}
+            self.scheduled = []
+
+        async def enqueue_job(self, name, run_id, *, _job_id):
+            self.ids.append(_job_id)
+            if result_key_prefix + _job_id in self.keys:
+                return None  # ARQ refuses IDs with a retained terminal result.
+            self.scheduled.append((name, run_id, _job_id))
+            return object()
+
+        async def exists(self, key):
+            return key in self.keys
+
+        async def delete(self, key):
+            self.keys.discard(key)
+
+    queue = RetainedResultQueue()
+    await enqueue_run(db_session, run, queue=queue)
+    assert queue.scheduled == [("review_docs_snapshot", run.id, job_id)]
+    assert queue.ids == [job_id, job_id]
+    assert run.status == "queued"
+    assert run.error_code is None
+
+
+async def test_none_enqueue_without_result_stays_visibly_unconfirmed(db_session, project_snapshot):
+    from app.worker.docs_review import enqueue_run
+
+    run = await start(db_session, project_snapshot)
+    run.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await db_session.commit()
+
+    class UnconfirmedQueue(FakeQueue):
+        async def enqueue_job(self, *args, **kwargs):
+            return None
+
+        async def exists(self, key):
+            return False
+
+    await enqueue_run(db_session, run, queue=UnconfirmedQueue())
+    assert run.status == "pending_enqueue"
+    assert run.error_code == "queue_delivery_unconfirmed"
+    assert run.lease_expires_at is None
+
+
+async def test_queued_run_uses_complete_frozen_request_after_runtime_defaults_change(
+    db_session, project_snapshot, monkeypatch
+):
+    from app.services.docs_review import assessment as service
+    from app.worker.docs_review import review_docs_snapshot
+
+    run = await start(db_session, project_snapshot)
+    frozen = copy.deepcopy(run.input_bundle)
+    options = frozen.get("completion_options")
+    assert options is not None, "Every provider option must be frozen at creation"
+    assert options == {
+        "model": "anthropic/test-model",
+        "messages": frozen["messages"],
+        "max_completion_tokens": 2000,
+        "response_format": {"type": "json_object"},
+        "num_retries": 0,
+        "timeout": 120,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "n": 1,
+        "stream": False,
+        "stop": None,
+        "seed": None,
+        "presence_penalty": None,
+        "frequency_penalty": None,
+    }
+    monkeypatch.setattr(
+        service,
+        "COMPLETION_DEFAULTS",
+        {
+            "temperature": 0.9,
+            "top_p": 0.8,
+            "timeout": 1,
+            "num_retries": 9,
+            "response_format": {"type": "text"},
+        },
+    )
+    seen = []
+
+    async def fake(**kwargs):
+        seen.append(copy.deepcopy(kwargs))
+        # Provider SDKs are allowed to mutate their argument dictionaries.
+        kwargs["messages"][0]["content"] = "mutated by provider"
+        return response()
+
+    await review_docs_snapshot(context(db_session, fake), run.id)
+    assert seen == [options]
+    await db_session.refresh(run)
+    assert run.input_bundle == frozen
+    assert run.status == "succeeded"
+
+
+async def test_older_queued_run_without_completion_options_fails_without_call(db_session, project_snapshot):
+    from app.services.docs_review.evidence import evidence_hash
+    from app.worker.docs_review import review_docs_snapshot
+
+    run = await start(db_session, project_snapshot)
+    run.input_bundle = {key: value for key, value in run.input_bundle.items() if key != "completion_options"}
+    run.input_sha256 = evidence_hash(run.input_bundle)
+    await db_session.commit()
+
+    async def forbidden(**kwargs):
+        pytest.fail("Missing request evidence must not be reconstructed at execution")
+
+    await review_docs_snapshot(context(db_session, forbidden), run.id)
+    await db_session.refresh(run)
+    assert run.status == "failed"
+    assert run.error_code == "completion_options_missing"
+    assert run.usage["provider_calls"] == 0
