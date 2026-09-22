@@ -22,9 +22,11 @@ from app.schemas.docs_review import (
     LessonConfirmationRequest,
     LessonRequest,
     ProjectRequest,
+    RunRequest,
     SnapshotRequest,
 )
 from app.services.docs_review import repository as repo
+from app.services.docs_review.development_fixture import create_fixture_run, load_development_fixture
 
 
 async def enabled_user(user=Depends(get_current_user)):
@@ -35,6 +37,20 @@ async def enabled_user(user=Depends(get_current_user)):
 
 router = APIRouter(dependencies=[Depends(enabled_user)])
 review_writer = require_permission("translations.edit")
+
+
+@router.get("/development-fixture")
+async def development_fixture():
+    return load_development_fixture()
+
+
+@router.post("/projects/{project_id}/runs", status_code=201)
+async def start_fixture_run(
+    project_id: str, request: RunRequest, user=Depends(review_writer), db: AsyncSession = Depends(get_db)
+):
+    run = await create_fixture_run(db, user.id, project_id, request)
+    items = await db.scalars(select(DocsReviewItem).where(DocsReviewItem.run_id == run.id).order_by(DocsReviewItem.id))
+    return {**repo.record_dict(run), "items": [repo.record_dict(item) for item in items]}
 
 
 @router.post("/projects", status_code=201)

@@ -721,3 +721,94 @@ async def test_evidence_foreign_keys_restrict_deletion(race_client, docs_project
     assert (
         await client.get(f"/api/docs-review/projects/{p['id']}/snapshots/{s['id']}", headers=headers(token))
     ).status_code == 200
+
+
+async def test_development_fixture_is_authenticated_read_only_golden(client, admin_token, db_session, monkeypatch):
+    from app.models.docs_review import DocsReviewProject
+
+    url = "/api/docs-review/development-fixture"
+    assert (await client.get(url)).status_code == 401
+    response = await client.get(url, headers=headers(admin_token))
+    assert response.status_code == 200
+    golden = Path(__file__).parent / "fixtures/docs_review/book-300-chapter-009.json"
+    packaged = Path(__file__).parents[1] / "app/services/docs_review/fixtures/book-300-chapter-009.json"
+    assert response.json() == json.loads(golden.read_text())
+    assert packaged.read_bytes() == golden.read_bytes()
+    assert all(
+        c["provenance"] == "analyst_development_example" and c["human_confirmed"] is False
+        for c in response.json()["analyst_cards"]
+    )
+    assert await db_session.scalar(select(func.count()).select_from(DocsReviewProject)) == 0
+    monkeypatch.setattr(get_settings(), "docs_review_enabled", False)
+    assert (await client.get(url, headers=headers(admin_token))).status_code == 404
+
+
+async def test_fixture_run_materializes_decidable_items(client, admin_token, reviewer_token, docs_project_payload):
+    fixture = json.loads((Path(__file__).parent / "fixtures/docs_review/book-300-chapter-009.json").read_text())
+    p = await project(client, admin_token, docs_project_payload)
+    s = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        dict(client_request_id="full", suggestions_pending=False, blocks=fixture["target_blocks"]),
+    )
+    url = f"/api/docs-review/projects/{p['id']}/runs"
+    request = dict(client_request_id="fixture-run", snapshot_id=s["id"], mode="fixture")
+    assert (await client.post(url, json=request, headers=headers(reviewer_token))).status_code == 404
+    result = await client.post(url, json=request, headers=headers(admin_token))
+    assert result.status_code == 201, result.text
+    run = result.json()
+    assert run["status"] == "completed"
+    assert len(run["items"]) == 6
+    assert run["input_bundle"]["fixture"]["analyst_cards"] == fixture["analyst_cards"]
+    assert run["usage"]["cost_usd"] == 0
+    assert (await client.post(url, json=request, headers=headers(admin_token))).json() == run
+    assert (await client.post(url, json={**request, "mode": "live"}, headers=headers(admin_token))).status_code == 409
+    for i, item in enumerate(run["items"]):
+        assert item["evidence_ids"]
+        response = await client.post(
+            f"/api/docs-review/projects/{p['id']}/decisions",
+            headers=headers(admin_token),
+            json=dict(
+                client_request_id=f"decide-{i}",
+                item_id=item["id"],
+                base_snapshot_id=s["id"],
+                reviewed_snapshot_id=s["id"],
+                disposition="audit_no_issue" if item["kind"] == "audit" else "no_issue",
+                note="Reviewed example, not approved knowledge",
+            ),
+        )
+        assert response.status_code == 201, response.text
+    changed = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        dict(
+            client_request_id="changed",
+            suggestions_pending=False,
+            blocks=[
+                {**b, "text": b["text"] + (" edited" if b["block_id"] == "target-0005" else "")}
+                for b in fixture["target_blocks"]
+            ],
+        ),
+    )
+    assert (
+        await client.post(url, json={**request, "snapshot_id": changed["id"]}, headers=headers(admin_token))
+    ).status_code == 409
+
+
+async def test_fixture_run_cannot_be_relabelled_as_another_language(client, admin_token, docs_project_payload):
+    fixture = json.loads((Path(__file__).parent / "fixtures/docs_review/book-300-chapter-009.json").read_text())
+    p = await project(client, admin_token, {**docs_project_payload, "target_language": "fr"})
+    s = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        dict(client_request_id="full", suggestions_pending=False, blocks=fixture["target_blocks"]),
+    )
+    response = await client.post(
+        f"/api/docs-review/projects/{p['id']}/runs",
+        headers=headers(admin_token),
+        json=dict(client_request_id="fixture", snapshot_id=s["id"], mode="fixture"),
+    )
+    assert response.status_code == 409

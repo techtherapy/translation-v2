@@ -1,0 +1,299 @@
+<!doctype html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font:
+          14px Georgia,
+          serif;
+        color: #243a36;
+        background: #f7f4eb;
+        margin: 16px;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      h2 {
+        font-size: 17px;
+      }
+      label {
+        display: block;
+        margin: 10px 0;
+      }
+      input,
+      textarea,
+      select {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 7px;
+        border: 1px solid #9ea99d;
+        background: #fffdf7;
+      }
+      button {
+        background: #215a4a;
+        color: white;
+        border: 0;
+        padding: 9px;
+        margin: 5px 5px 5px 0;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+      article {
+        border-top: 2px solid #bba86e;
+        margin: 20px 0;
+        padding-top: 10px;
+      }
+      pre,
+      blockquote {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 10px 0;
+        padding: 10px;
+        background: #ece9de;
+      }
+      small {
+        display: block;
+        color: #52665f;
+      }
+      #status {
+        white-space: pre-wrap;
+        padding: 8px 0;
+      }
+      details {
+        margin: 12px 0;
+      }
+      textarea {
+        min-height: 65px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BITS · Chapter review</h1>
+    <p>
+      Example findings · analyst development material. These examples are not
+      approved knowledge or a live AI review.
+    </p>
+    <div id="loginPanel">
+      <label>BITS username<input id="username" autocomplete="username" /></label
+      ><label
+        >Password<input
+          id="password"
+          type="password"
+          autocomplete="current-password" /></label
+      ><button id="login">Sign in to BITS</button>
+    </div>
+    <button id="signout">Sign out</button
+    ><button id="preview">Preview chapter</button
+    ><button id="refresh">Refresh review</button>
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="chapterPreview"></div>
+    <div id="decisionPreview"></div>
+    <div id="cards"></div>
+    <script>
+      function appendText(parent, tag, text) {
+        var node = document.createElement(tag);
+        node.textContent = text == null ? "" : String(text);
+        parent.appendChild(node);
+        return node;
+      }
+      function status(text) {
+        document.getElementById("status").textContent = text;
+      }
+      function busy(value) {
+        document.querySelectorAll("button").forEach(function (button) {
+          button.disabled = value;
+        });
+      }
+      function call(name, args, success) {
+        busy(true);
+        var runner = google.script.run
+          .withSuccessHandler(function (result) {
+            busy(false);
+            success(result);
+          })
+          .withFailureHandler(function (error) {
+            busy(false);
+            status(error.message || "Action failed. Please retry.");
+          });
+        runner[name].apply(runner, args);
+      }
+      function clearReview() {
+        ["chapterPreview", "decisionPreview", "cards"].forEach(function (id) {
+          document.getElementById(id).replaceChildren();
+        });
+      }
+      function login() {
+        var username = document.getElementById("username").value;
+        var password = document.getElementById("password").value;
+        document.getElementById("password").value = "";
+        clearReview();
+        call("signIn", [username, password], function () {
+          status("Signed in. Preview the supplied chapter to begin.");
+        });
+        password = "";
+      }
+      function button(parent, label, handler) {
+        var node = appendText(parent, "button", label);
+        node.addEventListener("click", handler);
+        return node;
+      }
+      function previewChapter() {
+        call("previewFixture", [], function (preview) {
+          clearReview();
+          var root = document.getElementById("chapterPreview");
+          appendText(root, "h2", preview.title);
+          appendText(root, "small", "Selected tab: " + preview.tabId);
+          appendText(
+            root,
+            "p",
+            "Load chapter inserts the supplied English only into an otherwise empty selected tab.",
+          );
+          var details = appendText(root, "details", "");
+          appendText(details, "summary", "Preview supplied English");
+          appendText(details, "pre", preview.text);
+          button(root, "Load chapter", function () {
+            call(
+              "loadChapter",
+              [preview.documentId, preview.tabId],
+              renderReview,
+            );
+          });
+          button(
+            root,
+            "Review supplied chapter already in this tab",
+            function () {
+              call(
+                "startExampleReview",
+                [preview.documentId, preview.tabId],
+                renderReview,
+              );
+            },
+          );
+          status(
+            "Check the preview and the selected test tab, then choose an action.",
+          );
+        });
+      }
+      function renderReview(review) {
+        clearReview();
+        status(review.message);
+        appendText(
+          document.getElementById("cards"),
+          "small",
+          "Assessed checkpoint: " + review.baseId,
+        );
+        review.items.forEach(function (item) {
+          var card = appendText(
+            document.getElementById("cards"),
+            "article",
+            "",
+          );
+          button(card, item.title, function () {
+            call("focusItem", [item.id], function () {
+              status(
+                "Passage selected. Manuscript text and formatting are unchanged.",
+              );
+            });
+          });
+          appendText(
+            card,
+            "small",
+            item.provenance + " · human confirmed: " + item.humanConfirmed,
+          );
+          var source = appendText(card, "details", "");
+          appendText(source, "summary", "Chinese source");
+          appendText(source, "blockquote", item.source);
+          appendText(card, "h2", "Exact English quote");
+          appendText(card, "blockquote", item.target);
+          appendText(card, "p", item.concern);
+          appendText(card, "small", "Evidence: " + item.evidence);
+          appendText(card, "p", item.action);
+          var label = appendText(card, "label", "Decision");
+          var select = appendText(label, "select", "");
+          var options =
+            item.kind === "audit"
+              ? [
+                  ["audit_no_issue", "Audit: no issue"],
+                  ["audit_found_issue", "Audit: issue found"],
+                ]
+              : [
+                  ["confirmed_issue", "Confirmed issue"],
+                  ["no_issue", "No issue"],
+                  ["corrected", "Corrected"],
+                  ["needs_another_opinion", "Needs another opinion"],
+                ];
+          options.forEach(function (option) {
+            var node = appendText(select, "option", option[1]);
+            node.value = option[0];
+          });
+          var noteLabel = appendText(card, "label", "Review note");
+          var note = appendText(noteLabel, "textarea", "");
+          note.maxLength = 5000;
+          button(card, "Preview decision", function () {
+            call(
+              "prepareDecision",
+              [item.id, select.value, note.value],
+              renderDecision,
+            );
+          });
+        });
+      }
+      function renderDecision(preview) {
+        var root = document.getElementById("decisionPreview");
+        root.replaceChildren();
+        appendText(root, "h2", "Confirm: " + preview.disposition);
+        appendText(root, "small", "Before checkpoint: " + preview.baseId);
+        appendText(root, "pre", preview.before);
+        appendText(root, "small", "Reviewed checkpoint: " + preview.reviewedId);
+        appendText(root, "pre", preview.after);
+        appendText(
+          root,
+          "p",
+          preview.changed
+            ? "Review both texts. Recording Corrected explicitly confirms this change."
+            : "This decision applies only to the captured checkpoint. Later edits are a new revision.",
+        );
+        button(root, "Record decision", function () {
+          call("recordDecision", [preview.nonce], function (decision) {
+            root.replaceChildren();
+            status(
+              "Recorded " +
+                decision.disposition +
+                " for checkpoint " +
+                decision.reviewed_snapshot_id +
+                ". Later edits are a new revision.",
+            );
+            call("refreshReview", [], function (review) {
+              renderReview(review);
+              status(
+                "Decision recorded for checkpoint " +
+                  decision.reviewed_snapshot_id +
+                  ". " +
+                  review.message,
+              );
+            });
+          });
+        });
+      }
+      document.getElementById("login").addEventListener("click", login);
+      document
+        .getElementById("preview")
+        .addEventListener("click", previewChapter);
+      document.getElementById("refresh").addEventListener("click", function () {
+        call("refreshReview", [], renderReview);
+      });
+      document.getElementById("signout").addEventListener("click", function () {
+        document.getElementById("password").value = "";
+        clearReview();
+        call("signOut", [], function () {
+          status("Signed out of BITS.");
+        });
+      });
+    </script>
+  </body>
+</html>
