@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # Google Docs review prototype: opt in explicitly.
     docs_review_enabled: bool = False
     docs_review_live_ai: bool = False
+    # Operator-selected, versioned prices; no inferred or downloaded pricing.
+    docs_review_price_schedules: dict[str, dict] = {}
+    docs_review_account_spend_limit_confirmed: bool = False
+    docs_review_account_spend_limit_usd: float = 0
+    docs_review_max_input_tokens: int = 24000
+    docs_review_max_output_tokens: int = 4000
+    docs_review_max_cost_usd: float = 1
 
     # App
     app_name: str = "BITS — Buddha Intelligence Translation System"

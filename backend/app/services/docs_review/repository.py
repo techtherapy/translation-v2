@@ -166,8 +166,11 @@ async def append_snapshot(db, owner_id, project_id, request: SnapshotRequest):
 
 async def create_run(db, owner_id, project_id, request: RunRequest, *, input_bundle: dict):
     project = await get_project(db, owner_id, project_id, lock=True)
+    # Guidance is a live-only input. Keep the fixture request contract unchanged.
+    if request.mode == "fixture" and request.guidance:
+        raise HTTPException(422, "Supplied guidance requires live review")
     # Request identity is the explicit client action, not mutable knowledge retrieved later.
-    payload = request.model_dump()
+    payload = request.model_dump(exclude={"guidance"} if request.mode == "fixture" else set())
     existing = await _retry(db, DocsReviewRun, project_id, payload)
     if existing is not None:
         return existing
@@ -243,7 +246,7 @@ async def append_decision(db, owner_id, project_id, request: DecisionRequest):
         .where(
             DocsReviewItem.id == request.item_id,
             DocsReviewRun.project_id == project_id,
-            DocsReviewRun.status == "completed",
+            DocsReviewRun.status.in_(["completed", "succeeded"]),
         )
     )
     if item is None:

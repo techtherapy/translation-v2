@@ -497,3 +497,298 @@ test("oversize serialized notes are rejected before creating any checkpoint", ()
   assert.equal(JSON.parse(properties["bits.pending"]).note, accepted);
   assert.ok(Buffer.byteLength(properties["bits.pending"], "utf8") <= 9000);
 });
+
+function sidebar(globals = {}) {
+  const elements = new Map();
+  function element() {
+    return {
+      textContent: "",
+      value: "",
+      children: [],
+      addEventListener() {},
+      appendChild(n) {
+        this.children.push(n);
+      },
+      replaceChildren() {
+        this.children = [];
+      },
+    };
+  }
+  const listeners = {};
+  const document = {
+    hidden: false,
+    createElement: element,
+    querySelectorAll: () => [],
+    getElementById: (id) => {
+      if (!elements.has(id)) elements.set(id, element());
+      return elements.get(id);
+    },
+    addEventListener: (name, fn) => (listeners[name] = fn),
+  };
+  const window = { addEventListener: (name, fn) => (listeners[name] = fn) };
+  const c = vm.createContext({ document, window, ...globals });
+  const html = fs.readFileSync(
+    path.join(__dirname, "..", "Sidebar.html"),
+    "utf8",
+  );
+  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], c);
+  return { c, document, listeners };
+}
+
+test("open-sidebar polling backs off, ignores late callbacks and stops on terminal or queue retry state", () => {
+  const timers = new Map();
+  const delays = [];
+  let next = 0;
+  const globals = {
+    setTimeout: (fn, delay) => {
+      delays.push(delay);
+      timers.set(++next, fn);
+      return next;
+    },
+    clearTimeout: (id) => timers.delete(id),
+  };
+  const { c } = sidebar(globals);
+  assert.equal(typeof c.createReviewPoller, "function");
+  const calls = [],
+    seen = [],
+    errors = [];
+  const poll = c.createReviewPoller(
+    (ok, fail) => calls.push({ ok, fail }),
+    (value) => seen.push(value.status),
+    (e) => errors.push(e),
+  );
+  function tick() {
+    const [id, fn] = timers.entries().next().value;
+    timers.delete(id);
+    fn();
+  }
+  poll.start("queued");
+  for (let i = 0; i < 10; i++) {
+    tick();
+    calls.at(-1).ok({ status: "running" });
+  }
+  assert.ok(delays[1] > delays[0]);
+  assert.ok(Math.max(...delays) <= 15000);
+  tick();
+  calls.at(-1).ok({ status: "succeeded" });
+  assert.equal(timers.size, 0);
+  for (const terminal of [
+    "failed",
+    "interrupted",
+    "pending_enqueue",
+    "completed",
+  ]) {
+    poll.start("queued");
+    tick();
+    calls.at(-1).ok({ status: terminal });
+    assert.equal(timers.size, 0);
+  }
+  poll.start("running");
+  tick();
+  const pending = calls.at(-1);
+  poll.stop();
+  const before = seen.length;
+  pending.ok({ status: "succeeded" });
+  assert.equal(seen.length, before);
+  assert.equal(timers.size, 0);
+  poll.start("running");
+  tick();
+  calls.at(-1).fail(Error("offline"));
+  assert.equal(errors.length, 1);
+  assert.equal(timers.size, 0);
+});
+
+test("closing or hiding sidebar cancels polling and prevents an in-flight response from rendering", () => {
+  const timers = new Map();
+  let next = 0,
+    ok;
+  const runner = {
+    withSuccessHandler(fn) {
+      ok = fn;
+      return this;
+    },
+    withFailureHandler() {
+      return this;
+    },
+    pollReview() {},
+  };
+  const { c, document, listeners } = sidebar({
+    google: { script: { run: runner } },
+    setTimeout: (fn) => {
+      timers.set(++next, fn);
+      return next;
+    },
+    clearTimeout: (id) => timers.delete(id),
+  });
+  c.renderReview({
+    status: "queued",
+    baseId: "b",
+    message: "Queued",
+    items: [],
+  });
+  assert.equal(timers.size, 1);
+  const [id, fn] = timers.entries().next().value;
+  timers.delete(id);
+  fn();
+  listeners.pagehide();
+  ok({ status: "succeeded", baseId: "b", message: "Late result", items: [] });
+  assert.equal(document.getElementById("status").textContent, "Queued");
+  assert.equal(timers.size, 0);
+  c.renderReview({
+    status: "queued",
+    baseId: "b",
+    message: "Queued",
+    items: [],
+  });
+  document.hidden = true;
+  listeners.visibilitychange();
+  assert.equal(timers.size, 0);
+});
+
+test("live presentation marks earlier versions and retryable queue states without modifying document or binding", () => {
+  const crypto = require("node:crypto");
+  const c = load({
+    PropertiesService: { getUserProperties: () => ({ deleteProperty() {} }) },
+    Utilities: {
+      DigestAlgorithm: { SHA_256: "sha256" },
+      Charset: { UTF_8: "utf8" },
+      computeDigest: (_a, value) => [
+        ...crypto.createHash("sha256").update(value).digest(),
+      ],
+    },
+  });
+  const hash = (value) =>
+    crypto.createHash("sha256").update(value).digest("hex");
+  const binding = {
+    projectId: "p",
+    baseId: "base",
+    runId: "run",
+    itemAnchors: {},
+  };
+  let anchorWrites = 0,
+    bindingWrites = 0;
+  c.binding_ = () => binding;
+  c.baseSnapshot_ = () => ({
+    id: "base",
+    target_sha256: hash("old"),
+    canonical_text: "old",
+    blocks: [],
+  });
+  c.readCheckpoint_ = () => ({ text: "newer manuscript" });
+  c.verifyBlockAnchors_ = () => {};
+  c.boundDocument_ = () => ({ tab: {} });
+  c.createItemAnchors_ = () => {
+    anchorWrites++;
+    return {};
+  };
+  c.saveBinding_ = () => bindingWrites++;
+  let run = {
+    mode: "live",
+    status: "succeeded",
+    items: [],
+    finding_count: 0,
+    audit_count: 0,
+  };
+  c.reviewRun_ = () => run;
+  assert.equal(typeof c.pollReview, "function");
+  const result = c.pollReview();
+  assert.match(result.message, /Review of an earlier version/);
+  assert.equal(result.changed, true);
+  assert.equal(result.status, "succeeded");
+  run = {
+    ...run,
+    status: "pending_enqueue",
+    queue_retryable: true,
+    error_code: "queue_unavailable",
+  };
+  const retry = c.pollReview();
+  assert.equal(retry.queueRetryable, true);
+  assert.match(retry.message, /retry/i);
+  assert.equal(anchorWrites, 0);
+  assert.equal(bindingWrites, 0);
+});
+
+test("live submission retries the frozen request after uncertain network delivery", () => {
+  const c = load();
+  const saved = [];
+  const binding = {
+    projectId: "p",
+    baseId: "snapshot",
+    pendingRunRequest: {
+      client_request_id: "stable-request",
+      snapshot_id: "snapshot",
+      mode: "live",
+      model: "anthropic/test",
+    },
+  };
+  c.binding_ = () => binding;
+  c.saveBinding_ = (value) => saved.push(JSON.parse(JSON.stringify(value)));
+  const requests = [];
+  c.apiRequest_ = (_path, _method, body) => {
+    requests.push(JSON.parse(JSON.stringify(body)));
+    if (requests.length === 1) throw Error("unknown network delivery");
+    return { id: "run" };
+  };
+  c.refreshReview = () => ({ status: "queued" });
+  assert.equal(typeof c.startLiveReview, "function");
+  assert.throws(() => c.startLiveReview({}), /network/);
+  assert.equal(c.startLiveReview({}).status, "queued");
+  assert.deepEqual(requests[0], requests[1]);
+  assert.equal(binding.runId, "run");
+  assert.equal(binding.baseId, "snapshot");
+  assert.equal(binding.pendingRunRequest, undefined);
+});
+
+test("completed live review metadata cannot overwrite a newer checkpoint binding", () => {
+  const c = load();
+  const old = {
+    projectId: "p",
+    baseId: "base",
+    runId: "old-run",
+    itemAnchors: {},
+  };
+  const fresh = { ...old, baseId: "new-base", runId: "new-run" };
+  let saves = 0;
+  c.checkpointHash_ = () => "hash";
+  c.binding_ = () => fresh;
+  c.saveBinding_ = () => saves++;
+  c.verifyBlockAnchors_ = () => {};
+  c.boundDocument_ = () => ({ tab: {} });
+  c.createItemAnchors_ = () => ({ item: "range" });
+  assert.throws(
+    () =>
+      c.liveReviewPresentation_(
+        old,
+        { id: "base", target_sha256: "hash" },
+        { status: "succeeded", items: [{ id: "item" }] },
+        { text: "current" },
+      ),
+    /newer review/i,
+  );
+  assert.equal(saves, 0);
+  assert.equal(fresh.baseId, "new-base");
+});
+
+test("pending live request refuses oversized guidance before creating a new checkpoint", () => {
+  const c = load({
+    Utilities: {
+      newBlob: (value) => ({ getBytes: () => [...Buffer.from(value)] }),
+    },
+  });
+  let reads = 0;
+  c.binding_ = () => ({ projectId: "p" });
+  c.readCheckpoint_ = () => {
+    reads++;
+    throw Error("checkpoint read happened");
+  };
+  assert.throws(
+    () =>
+      c.startLiveReview({
+        model: "anthropic/test",
+        limits: {},
+        guidance: [{ id: "g", content: "😀".repeat(3000) }],
+      }),
+    /guidance.*large|shorten/i,
+  );
+  assert.equal(reads, 0);
+});

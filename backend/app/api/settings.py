@@ -15,6 +15,7 @@ from app.core.permissions import (
 )
 from app.models.user import User
 from app.models.setting import Setting
+from app.services.runtime_settings import _apply_to_env
 from app.schemas.settings import (
     SettingValue, SettingsResponse, SettingsUpdate,
     RolePermissionsResponse, RolePermissionsUpdate,
@@ -51,14 +52,6 @@ def _mask(value: str) -> str:
     if len(value) <= 4:
         return "••••"
     return "•" * 8 + value[-4:]
-
-
-def _apply_to_env(key: str, value: str) -> None:
-    """Push a setting into the process environment so LiteLLM picks it up."""
-    if value:
-        os.environ[key] = value
-    elif key in os.environ:
-        del os.environ[key]
 
 
 @router.get("", response_model=SettingsResponse)
@@ -485,14 +478,6 @@ async def refresh_model_catalog(
         new_costs = resp.json()
     litellm.model_cost = new_costs
     return {"model_count": len(new_costs), "refreshed": True}
-
-
-async def load_settings_into_env(db: AsyncSession) -> None:
-    """Called on startup to hydrate os.environ from the DB."""
-    result = await db.execute(select(Setting))
-    for setting in result.scalars().all():
-        if setting.value:
-            _apply_to_env(setting.key, setting.value)
 
 
 # ── Prompt Templates ──────────────────────────────────

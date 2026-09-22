@@ -56,7 +56,7 @@ async def health():
 
 async def _load_settings():
     """Hydrate os.environ with API keys stored in the DB."""
-    from app.api.settings import load_settings_into_env
+    from app.services.runtime_settings import load_settings_into_env
     async with async_session() as db:
         await load_settings_into_env(db)
     logger.info("Settings loaded from database")

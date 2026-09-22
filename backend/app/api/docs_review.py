@@ -27,6 +27,7 @@ from app.schemas.docs_review import (
 )
 from app.services.docs_review import repository as repo
 from app.services.docs_review.development_fixture import create_fixture_run, load_development_fixture
+from app.worker.docs_review import create_live_run, enqueue_run, reconcile_run
 
 
 async def enabled_user(user=Depends(get_current_user)):
@@ -45,12 +46,11 @@ async def development_fixture():
 
 
 @router.post("/projects/{project_id}/runs", status_code=201)
-async def start_fixture_run(
+async def start_run(
     project_id: str, request: RunRequest, user=Depends(review_writer), db: AsyncSession = Depends(get_db)
 ):
-    run = await create_fixture_run(db, user.id, project_id, request)
-    items = await db.scalars(select(DocsReviewItem).where(DocsReviewItem.run_id == run.id).order_by(DocsReviewItem.id))
-    return {**repo.record_dict(run), "items": [repo.record_dict(item) for item in items]}
+    run = await (create_fixture_run if request.mode == "fixture" else create_live_run)(db, user.id, project_id, request)
+    return await run_response(db, run)
 
 
 @router.post("/projects", status_code=201)
@@ -80,8 +80,33 @@ async def get_snapshot(
 @router.get("/projects/{project_id}/runs/{run_id}")
 async def get_run(project_id: str, run_id: str, user=Depends(enabled_user), db: AsyncSession = Depends(get_db)):
     run = await repo.get_record(db, user.id, project_id, DocsReviewRun, run_id)
-    items = await db.scalars(select(DocsReviewItem).where(DocsReviewItem.run_id == run.id).order_by(DocsReviewItem.id))
-    return {**repo.record_dict(run), "items": [repo.record_dict(item) for item in items]}
+    if run.mode == "live":
+        await reconcile_run(db, run)
+    return await run_response(db, run)
+
+
+async def run_response(db, run):
+    items = list(
+        await db.scalars(select(DocsReviewItem).where(DocsReviewItem.run_id == run.id).order_by(DocsReviewItem.id))
+    )
+    result = {**repo.record_dict(run), "items": [repo.record_dict(item) for item in items]}
+    if run.mode == "live":
+        result.pop("raw_response")
+        result.update(
+            queue_retryable=run.status == "pending_enqueue",
+            finding_count=sum(i.kind == "finding" for i in items),
+            audit_count=sum(i.kind == "audit" for i in items),
+        )
+    return result
+
+
+@router.post("/projects/{project_id}/runs/{run_id}/retry")
+async def retry_run(project_id: str, run_id: str, user=Depends(review_writer), db: AsyncSession = Depends(get_db)):
+    run = await repo.get_record(db, user.id, project_id, DocsReviewRun, run_id)
+    if run.mode != "live" or not get_settings().docs_review_live_ai:
+        raise HTTPException(409, "Live queue retry is unavailable")
+    await enqueue_run(db, run)
+    return await run_response(db, run)
 
 
 @router.post("/projects/{project_id}/decisions", status_code=201)

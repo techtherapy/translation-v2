@@ -62,12 +62,25 @@ class RunLimits(StrictModel):
     max_cost_usd: float | None = Field(default=None, gt=0)
 
 
+class SuppliedGuidance(StrictModel):
+    id: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1)
+
+
 class RunRequest(StrictModel):
     client_request_id: str = Field(min_length=1, max_length=255)
     snapshot_id: str = Field(min_length=1)
     mode: Literal["fixture", "live"]
     model: str | None = Field(default=None, min_length=1)
     limits: RunLimits | None = None
+    guidance: list[SuppliedGuidance] = Field(default_factory=list)
+
+    @field_validator("guidance")
+    @classmethod
+    def unique_guidance_ids(cls, guidance):
+        if len({item.id for item in guidance}) != len(guidance):
+            raise ValueError("Guidance IDs must be unique")
+        return guidance
 
 
 class DecisionRequest(StrictModel):
@@ -119,3 +132,13 @@ class ProjectRequest(StrictModel):
 class LessonConfirmationRequest(StrictModel):
     client_request_id: str = Field(min_length=1, max_length=255)
     expected_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ReviewCoverage(StrictModel):
+    source_block_ids: list[str]
+    target_block_ids: list[str]
+    complete: Literal[True]
+
+
+class LiveReviewAssessment(ReviewAssessment):
+    coverage: ReviewCoverage

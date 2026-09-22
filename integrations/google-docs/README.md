@@ -1,6 +1,6 @@
 # BITS Google Docs review prototype
 
-A standalone Apps Script **Editor add-on** for a maintainer's personal Google account. It loads Book 300, Chapter 9 into an explicitly selected empty test tab, shows six analyst examples, and records private BITS review decisions against immutable checkpoints. It does not run an AI model, edit native suggestions, approve shared knowledge, or replace manuscript wording.
+A standalone Apps Script **Editor add-on** for a maintainer's personal Google account. It loads Book 300, Chapter 9 into an explicitly selected empty test tab, shows six analyst examples, and records private BITS review decisions against immutable checkpoints. Live AI review is a separate, default-off pilot. Neither review mode edits native suggestions, approves shared knowledge, or replaces manuscript wording.
 
 ## Set up a personal-account test deployment
 
@@ -34,12 +34,35 @@ There is no Drive discovery scope, Drive listing, native suggestion write scope,
 - A fresh checkpoint compares DocumentApp text before and after the Docs API read, checks canonical paragraph text agreement, and inspects insertions, deletions and style suggestions. Tables, footnotes, headers, footers and embedded content are outside this prototype's chapter scope and block checkpoints. Only the bound tab is assessed.
 - The event certifies the reviewed checkpoint, not future document state. Confirmation checks the document again against the displayed checkpoint. Network retries of the same decision use the same request ID. A successful submission refreshes the sidebar; later typing remains a new revision. Google does not offer an atomic lock against concurrent human edits here, so an edit after the last read does not change the recorded event's meaning.
 - The packaged fixture is byte-identical to the Task 1 golden fixture. `GET /api/docs-review/development-fixture` is authenticated, feature-gated and read-only. Every card retains `analyst_development_example` and `human_confirmed: false`. The English approval status is unknown. No production translation, glossary, style rule, golden example or approved lesson is created by fetching/loading/deciding these examples.
-- `POST /api/docs-review/projects/{id}/runs` currently accepts `mode: "fixture"` only. It freezes the fixture and snapshot, creates four findings and two audit checks, and returns their database IDs synchronously with zero provider calls/cost. It requires exact supplied source, block IDs and English text; it cannot pretend to reassess edited text. `mode: "live"` returns 409 until Task 4 implements live review. Provenance is frozen in the run bundle and explicitly referenced by each item.
+- `POST /api/docs-review/projects/{id}/runs` preserves synchronous `mode: "fixture"`. It freezes the fixture and snapshot, creates four findings and two audit checks, and returns their database IDs synchronously with zero provider calls/cost. It requires exact supplied source, block IDs and English text; it cannot pretend to reassess edited text. `mode: "live"` requires the separately enabled pilot described below. Provenance is frozen in the run bundle and explicitly referenced by each item.
+
+## Live review pilot
+
+Both `DOCS_REVIEW_ENABLED` and `DOCS_REVIEW_LIVE_AI` default to false. Before enabling live review, an operator must configure the selected provider's API key, an **actual provider/account-side spend cap**, and a versioned price schedule. Model credentials saved through BITS settings are hydrated by both web startup and ARQ worker startup. Restart the worker after changing credentials; the web settings writer still applies changes immediately in its own process.
+
+Configure these deployment environment values explicitly:
+
+- `DOCS_REVIEW_ACCOUNT_SPEND_LIMIT_CONFIRMED=true` only after configuring the real provider/account-side cap.
+- `DOCS_REVIEW_ACCOUNT_SPEND_LIMIT_USD` is the pilot's total conservative reservation ceiling, in USD.
+- `DOCS_REVIEW_PRICE_SCHEDULES` is a JSON map keyed by the normalized LiteLLM model name. Each value requires `id`, `input_per_million`, and `output_per_million`. Enter verified rates for that exact model and account. No automatic price lookup or default price is used. Example **shape only**, not real pricing: `{"provider/exact-model":{"id":"verified-schedule-date","input_per_million":1.0,"output_per_million":2.0}}`.
+- Server ceilings default to `DOCS_REVIEW_MAX_INPUT_TOKENS=24000`, `DOCS_REVIEW_MAX_OUTPUT_TOKENS=4000`, and `DOCS_REVIEW_MAX_COST_USD=1`. Every live request must also supply an explicit model and all three run-local limits.
+
+Run a separate worker process with `arq app.worker.config.WorkerSettings`, using the same database, Redis, and pilot configuration as the web process. No worker or add-on deployment is performed by this implementation. The existing translation spike remains registered.
+
+After binding the supplied source chapter in the add-on, expand **Live review of the current chapter**, choose the model and limits, optionally supply chapter guidance, and start the review. The add-on captures the current translation as a new checkpoint. Source and target text plus only the explicit guidance enter the prompt; analyst fixture cards, proposed lessons, and held-out examples are never automatically added. The live API also supports owner-created projects independently of the fixture.
+
+A run freezes the full short chapter, guidance IDs/content, exact prompt and schema version, model, price schedule, limits, and audit seed. A conservative UTF-8 byte bound plus message overhead refuses over-limit input rather than truncating it. The worker reserves the maximum input/output cost before making one completion call, with automatic retries disabled. The shared database setting `DOCS_REVIEW_PILOT_RESERVED_USD` serializes total reservations across runs and workers; it is not automatically refunded, even when a response is invalid, interrupted, or lost. An operator must reconcile provider accounting before intentionally raising the pilot ceiling. These are estimates, so the independently configured provider/account cap remains necessary.
+
+States are `pending_enqueue`, `queued`, `running`, `succeeded`, `failed`, and `interrupted`. A queue outage leaves a saved, visible request with **Retry queue delivery**. Queued requests unconfirmed for five minutes become retryable on status read. Retries reuse `docs-review:<run ID>`. The worker conditionally acquires one lease before calling the provider. Expired running leases, cancellations, and uncertain provider failures become interrupted and never auto-call again. Redelivery of a completed run returns its stored result. Late provider output is retained privately without reviving the run or creating findings.
+
+The sidebar polls at 1, 2, 4, 8, then at most 15 seconds while open and visible, and stops on completion, failure, interruption, retryable queue state, network error, sign-out, or closing/hiding the sidebar. Refresh resumes status checks. At presentation, a SHA-256 comparison with the current manuscript marks **Review of an earlier version**; completion does not overwrite a newer checkpoint or change text/styles. A lost submission response preserves the same request ID and frozen options for retry.
+
+A successful assessment produces human-review candidates and a separately counted random audit, never a clean-chapter certification. Every finding passes strict schema and exact quotation/evidence-ID grounding checks against the frozen bundle. Full-chapter coverage must be reported; invalid JSON, incomplete/truncated output, and invented spans/references fail the whole run. Raw model output remains private database evidence and is omitted from the live status API. The audit uses sorted unique nonempty unflagged blocks, a local seeded random generator, and a persisted population, seed, requested count, actual count, and selected IDs. Default count is three or all remaining eligible blocks if fewer. Unflagged passages, including audit samples, remain unreviewed until an explicit human decision. This sample is a workflow pilot setting, not a production quality guarantee.
 
 ## Verification and remaining live checks
 
 ```sh
-cd backend && .venv/bin/python -m pytest tests/test_docs_review_api.py -q
+cd backend && .venv/bin/python -m pytest tests/test_docs_review_assessment.py tests/test_docs_review_jobs.py tests/test_docs_review_api.py tests/test_runtime_settings.py tests/test_worker.py -q
 cd .. && node --test integrations/google-docs/tests/*.test.cjs
 ```
 

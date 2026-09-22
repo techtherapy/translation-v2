@@ -136,6 +136,7 @@ test("sidebar renders hostile concern as literal text and clears password immedi
     },
     createElement: element,
     querySelectorAll: () => [],
+    addEventListener() {},
   };
   let passwordDuringCall;
   const runner = new Proxy(
@@ -152,6 +153,7 @@ test("sidebar renders hostile concern as literal text and clears password immedi
   );
   const c = vm.createContext({
     document,
+    window: { addEventListener() {} },
     google: { script: { run: runner } },
     console,
   });

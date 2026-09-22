@@ -26,7 +26,7 @@ function binding_() {
 }
 function saveBinding_(binding) {
   var serialized = JSON.stringify(binding);
-  if (serialized.length > 8000)
+  if (Utilities.newBlob(serialized).getBytes().length > 8000)
     throw new Error("Review binding is too large for this prototype.");
   PropertiesService.getUserProperties().setProperty("bits.binding", serialized);
 }
@@ -151,16 +151,171 @@ function beginExampleReview_(binding, fixture) {
   return refreshReview();
 }
 
+function checkpointHash_(text) {
+  return Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    text,
+    Utilities.Charset.UTF_8,
+  )
+    .map(function (byte) {
+      return ("0" + ((byte + 256) % 256).toString(16)).slice(-2);
+    })
+    .join("");
+}
+
+function startLiveReview(options) {
+  var binding = binding_();
+  // A lost HTTP response must reuse the exact action, even if typing has continued.
+  if (!binding.pendingRunRequest) {
+    if (!options.model || !options.model.trim())
+      throw new Error("Choose an explicit model for live review.");
+    if (
+      Utilities.newBlob(JSON.stringify(options.guidance || [])).getBytes()
+        .length > 3000
+    )
+      throw new Error(
+        "Live review guidance is too large. Shorten it before starting a new checkpoint.",
+      );
+    var current = readCheckpoint_(binding);
+    var blocks = current.blocks.map(function (block) {
+      return {
+        block_id: Utilities.getUuid(),
+        text: block.text,
+        kind: block.kind,
+      };
+    });
+    binding.blockAnchors = createBlockAnchors_(binding, blocks);
+    var snapshot = apiRequest_(projectPath_(binding) + "/snapshots", "post", {
+      client_request_id: Utilities.getUuid(),
+      observed_revision_id: current.revisionId,
+      suggestions_pending: false,
+      blocks: blocks.map(function (block, index) {
+        block.named_range_id = binding.blockAnchors[index];
+        return block;
+      }),
+    });
+    binding.baseId = snapshot.id;
+    binding.pendingRunRequest = {
+      client_request_id: Utilities.getUuid(),
+      snapshot_id: snapshot.id,
+      mode: "live",
+      model: options.model.trim(),
+      limits: options.limits,
+      guidance: options.guidance || [],
+    };
+    binding.itemAnchors = {};
+    delete binding.runId;
+    delete binding.itemAnchorRunId;
+    saveBinding_(binding);
+  }
+  var run = apiRequest_(
+    projectPath_(binding) + "/runs",
+    "post",
+    binding.pendingRunRequest,
+  );
+  binding.runId = run.id;
+  delete binding.pendingRunRequest;
+  saveBinding_(binding);
+  return refreshReview();
+}
+
+function retryReviewQueue() {
+  var binding = binding_();
+  retryReviewRun_(binding);
+  return refreshReview();
+}
+
+function pollReview() {
+  // No timers or triggers run in Apps Script. Only the open sidebar requests status.
+  return refreshReview();
+}
+
+function liveReviewPresentation_(binding, base, run, current) {
+  var changed = checkpointHash_(current.text) !== base.target_sha256;
+  var message =
+    {
+      pending_enqueue:
+        "Queue unavailable or unconfirmed. Retry queue delivery for this saved review.",
+      queued: "Review queued. Your checkpoint has been saved.",
+      running:
+        "Review in progress. You can keep editing; this review stays tied to its checkpoint.",
+      succeeded:
+        "AI candidates and random audits are ready. Unflagged passages remain unreviewed.",
+      failed:
+        "Review failed (" +
+        run.error_code +
+        "). No chapter approval or partial findings were recorded.",
+      interrupted:
+        "Review interrupted; provider completion is unknown. This run will not make another paid call. Ask the maintainer to inspect it.",
+    }[run.status] || "Review state unavailable. Refresh explicitly.";
+  if (changed) message = "Review of an earlier version. " + message;
+  if (
+    !changed &&
+    run.status === "succeeded" &&
+    run.items.length &&
+    binding.itemAnchorRunId !== binding.runId
+  ) {
+    verifyBlockAnchors_(binding, base, boundDocument_(binding).tab);
+    var anchors = createItemAnchors_(binding, base, run.items);
+    // A newer explicit checkpoint binding must never be replaced by this completion.
+    var latest = binding_();
+    if (latest.runId !== binding.runId || latest.baseId !== binding.baseId)
+      throw new Error("A newer review is open. Refresh to see it.");
+    latest.itemAnchors = anchors;
+    latest.itemAnchorRunId = binding.runId;
+    saveBinding_(latest);
+  }
+  return {
+    baseId: base.id,
+    status: run.status,
+    changed: changed,
+    message: message,
+    queueRetryable: run.queue_retryable === true,
+    findingCount: run.finding_count || 0,
+    auditCount: run.audit_count || 0,
+    items: run.items.map(function (item) {
+      return {
+        id: item.id,
+        kind: item.kind,
+        title:
+          item.kind === "audit"
+            ? "Random audit passage"
+            : "Review " + item.category,
+        source: item.source_spans
+          .map(function (s) {
+            return s.quote;
+          })
+          .join("\n"),
+        target: item.target_spans
+          .map(function (s) {
+            return s.quote;
+          })
+          .join("\n\n"),
+        concern: item.explanation,
+        provenance:
+          item.kind === "audit" ? "Recorded random sample" : "AI candidate",
+        humanConfirmed: false,
+        evidence:
+          item.evidence_ids.join(", ") || "Supplied source and translation",
+        action: "Review the whole chapter context before recording a decision.",
+      };
+    }),
+  };
+}
+
 function refreshReview() {
   var binding = binding_();
   PropertiesService.getUserProperties().deleteProperty("bits.pending");
   var base = baseSnapshot_(binding);
   var run = reviewRun_(binding);
   var current = readCheckpoint_(binding);
+  if (run.mode === "live")
+    return liveReviewPresentation_(binding, base, run, current);
   verifyBlockAnchors_(binding, base, boundDocument_(binding).tab);
   var cards = run.input_bundle.fixture.analyst_cards;
   return {
     baseId: base.id,
+    status: run.status,
     changed: current.text !== base.canonical_text,
     message:
       current.text !== base.canonical_text

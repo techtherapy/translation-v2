@@ -113,3 +113,14 @@ function signOut() {
   });
   return { signedIn: false };
 }
+
+function retryReviewRun_(binding) {
+  return apiRequest_(
+    "/api/docs-review/projects/" +
+      binding.projectId +
+      "/runs/" +
+      binding.runId +
+      "/retry",
+    "post",
+  );
+}

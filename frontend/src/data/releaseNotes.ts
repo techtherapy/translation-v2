@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.23.0',
+    date: '2026-09-21',
+    highlights: [
+      'Added an optional Google Docs AI review pilot with findings linked to the source text and separate random passage checks',
+      'Reviews now preserve their original chapter version, show progress, and let you retry requests that could not start',
+    ],
+  },
+  {
     version: '0.22.1',
     date: '2026-09-21',
     highlights: [

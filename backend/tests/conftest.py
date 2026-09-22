@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -9,6 +11,9 @@ from app.models.language import Language
 
 # Import all models so Base.metadata knows about every table
 import app.models  # noqa: F401
+
+# LiteLLM imports must use its bundled catalog; tests never fetch live prices.
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
