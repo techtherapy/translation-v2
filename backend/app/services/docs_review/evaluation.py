@@ -161,23 +161,9 @@ async def create_experiment(db, owner_id, project_id, request):
         if lesson.status != "confirmed" or lesson.content_hash != evidence_hash(repo.lesson_content(lesson)):
             raise HTTPException(409, "Experiments require intact confirmed lessons")
         lessons.append(dict(id=lesson.id, content_hash=lesson.content_hash, **repo.lesson_content(lesson)))
-    owner_projects = select(DocsReviewProject.id).where(DocsReviewProject.owner_user_id == owner_id)
-    sources = list(
-        await db.scalars(select(DocsReviewProject.source_text).where(DocsReviewProject.owner_user_id == owner_id))
-    )
-    sources.extend([load_development_fixture()["raw_chinese_section"], *request.development_sources])
+    sources = await current_development_sources(db, owner_id)
+    sources.extend(request.development_sources)
     sources.extend(g.content for g in config.guidance)
-    for lesson in await db.scalars(select(DocsReviewLesson).where(DocsReviewLesson.project_id.in_(owner_projects))):
-        sources.extend(evidence_sources(repo.lesson_content(lesson)))
-    for previous in await db.scalars(
-        select(DocsReviewExperiment).where(DocsReviewExperiment.project_id.in_(owner_projects))
-    ):
-        labeled = {label["example_id"] for label in previous.independent_labels}
-        sources.extend(
-            e["source_text"]
-            for e in previous.evaluation_examples
-            if e["id"] in labeled or e["classification"] == "development"
-        )
     sources.extend(e["source_text"] for e in examples if e["classification"] == "development")
     exclusions = []
     seen = []
@@ -227,29 +213,78 @@ async def create_experiment(db, owner_id, project_id, request):
     )
 
 
-async def validate_current_holdout(db, experiment):
-    project = await db.get(DocsReviewProject, experiment.project_id)
-    owner_projects = select(DocsReviewProject.id).where(DocsReviewProject.owner_user_id == project.owner_user_id)
-    sources = list(experiment.report["exclusion_sources"])
+async def current_development_sources(db, owner_id, *, skip_experiment_id=None):
+    """One source of truth for current chapters and append-only exclusion history."""
+    owner_projects = select(DocsReviewProject.id).where(DocsReviewProject.owner_user_id == owner_id)
+    sources = [load_development_fixture()["raw_chinese_section"]]
+    sources.extend(
+        await db.scalars(select(DocsReviewProject.source_text).where(DocsReviewProject.owner_user_id == owner_id))
+    )
     for lesson in await db.scalars(select(DocsReviewLesson).where(DocsReviewLesson.project_id.in_(owner_projects))):
         sources.extend(evidence_sources(repo.lesson_content(lesson)))
-    for other in await db.scalars(
-        select(DocsReviewExperiment).where(
-            DocsReviewExperiment.project_id.in_(owner_projects), DocsReviewExperiment.id != experiment.id
-        )
-    ):
-        labeled = {label["example_id"] for label in other.independent_labels}
+    previous_experiments = select(DocsReviewExperiment).where(DocsReviewExperiment.project_id.in_(owner_projects))
+    if skip_experiment_id is not None:
+        previous_experiments = previous_experiments.where(DocsReviewExperiment.id != skip_experiment_id)
+    for previous in await db.scalars(previous_experiments):
+        # These exact saved strings include explicit development sources and supplied
+        # guidance, even for experiments whose outputs were never run or labeled.
+        sources.extend(previous.report["exclusion_sources"])
+        labeled = {label["example_id"] for label in previous.independent_labels}
         sources.extend(
             e["source_text"]
-            for e in other.evaluation_examples
+            for e in previous.evaluation_examples
             if e["id"] in labeled or e["classification"] == "development"
         )
-    try:
-        require_unseen(
-            [e["source_text"] for e in experiment.evaluation_examples if e["classification"] == "heldout"], sources
+    # Histories inherit prior histories; deduplicate without normalizing away evidence.
+    return list(dict.fromkeys(sources))
+
+
+async def validate_current_holdout(db, experiment):
+    project = await db.get(DocsReviewProject, experiment.project_id)
+    sources = list(
+        dict.fromkeys(
+            [
+                *experiment.report["exclusion_sources"],
+                *await current_development_sources(db, project.owner_user_id, skip_experiment_id=experiment.id),
+            ]
         )
-    except ValueError as exc:
-        raise AssessmentError("holdout_no_longer_unseen") from exc
+    )
+    exclusions = []
+    for example in experiment.evaluation_examples:
+        if example["classification"] != "heldout":
+            continue
+        matches = overlap_signals([example["source_text"]], sources)
+        if matches:
+            exclusions.append(
+                dict(
+                    example_id=example["id"],
+                    classification="development",
+                    matches=matches,
+                    reason="holdout_no_longer_unseen",
+                    detected_at=datetime.now(UTC).isoformat(),
+                )
+            )
+    previous_ids = {e["example_id"] for e in experiment.report["exclusions"]}
+    # Keep frozen inputs and original requested classifications intact. Exclusion
+    # evidence is append-only metadata; earlier report revisions remain unchanged.
+    experiment.report = {
+        **experiment.report,
+        "exclusion_sources": sources,
+        "exclusions": [
+            *experiment.report["exclusions"],
+            *[e for e in exclusions if e["example_id"] not in previous_ids],
+        ],
+    }
+    experiment.excluded_example_hashes = sorted(
+        set(
+            [
+                *experiment.excluded_example_hashes,
+                *[repo.text_hash(source) for source in sources],
+            ]
+        )
+    )
+    if exclusions:
+        raise AssessmentError("holdout_no_longer_unseen")
 
 
 async def generate_draft(bundle, completion_client):
@@ -363,8 +398,12 @@ def public_experiment(experiment):
         reports=deepcopy(experiment.report["revisions"]),
     )
     all_judged = True
+    excluded = {e["example_id"] for e in experiment.report["exclusions"]}
     for e in experiment.evaluation_examples:
         example = deepcopy(e)
+        if e["id"] in excluded:
+            example["requested_classification"] = e["classification"]
+            example["classification"] = "development"
         refs, judgments = labels_for(experiment, e["id"], "reference"), labels_for(experiment, e["id"], "judgment")
         example.update(
             reference_submitted=bool(refs), judgment_submitted=bool(judgments), labels=deepcopy([*refs, *judgments])
@@ -494,8 +533,9 @@ def build_report(experiment):
     }
     generation = {arm: dict(serious_issues=None, labeled_examples=0, unknown_examples=0) for arm in totals}
     heldout, labeled, complete = 0, 0, True
+    excluded = {e["example_id"] for e in experiment.report["exclusions"]}
     for example in experiment.evaluation_examples:
-        if example["classification"] != "heldout":
+        if example["classification"] != "heldout" or example["id"] in excluded:
             continue
         heldout += 1
         refs = labels_for(experiment, example["id"], "reference")

@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.1',
+    date: '2026-09-21',
+    highlights: [
+      'Previously reviewed examples and newly added source chapters are now kept out of independent comparison results',
+    ],
+  },
+  {
     version: '0.24.0',
     date: '2026-09-21',
     highlights: [

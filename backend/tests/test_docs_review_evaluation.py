@@ -669,3 +669,157 @@ async def test_attempt_is_durable_before_provider_can_lose_response(client, admi
     assert result["status"] == "succeeded"
     assert markers == [(1, 1), (2, 2)], "Dispatch attempts must be durable before any response or process loss"
     assert e.report["execution"]["provider_calls"] == 2
+
+
+def historical_evidence_payload(kind):
+    payload = experiment_payload(client_request_id="historical-evidence")
+    source = payload["evaluation_examples"][0]["source_text"]
+    payload["evaluation_examples"][0].update(
+        id="other-passage",
+        source_text="海邊漁舟迎著晨光返航。",
+        translated_text="Fishing boats return in the morning light.",
+    )
+    if kind == "development_sources":
+        payload["development_sources"] = [source]
+    else:
+        for arm in ("baseline_input", "candidate_input"):
+            payload[arm]["guidance"] = [{"id": "earlier-example", "content": "Reviewed source example: " + source}]
+    return payload
+
+
+async def assert_development_cannot_improve_report(client, token, completed, db, payload):
+    """Even complete, favorable human labels must not promote development evidence."""
+    from app.services.docs_review.evaluation import build_report
+
+    payload = copy.deepcopy(payload)
+    payload["client_request_id"] = "reclassified-development"
+    payload["evaluation_examples"][0]["classification"] = "development"
+    root, view = await create(client, token, completed, payload)
+    calls = 0
+
+    async def favorable(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion(
+                dict(
+                    schema_version=1,
+                    findings=[
+                        dict(
+                            category="meaning",
+                            proposed_severity="minor",
+                            source_spans=[dict(block_id="source", quote="山間", occurrence=0)],
+                            target_spans=[dict(block_id="target", quote="Autumn", occurrence=0)],
+                            explanation="A false alarm for the human to dismiss",
+                            evidence_ids=[],
+                        )
+                    ],
+                    coverage=dict(source_block_ids=["source"], target_block_ids=["target"], complete=True),
+                )
+            )
+        return await fake(**kwargs)
+
+    e, result = await run_experiment(db, completed, view["id"], favorable)
+    assert result["status"] == "succeeded"
+    url = root + f"/experiments/{e.id}/labels"
+    assert (await client.post(url, json=reference_payload(), headers=headers(token))).status_code == 201
+    by_arm = {
+        "baseline": dict(
+            flags=[dict(finding_index=0, false_alarm=True, reference_issue_ids=[])],
+            audits=[],
+            review_intervals=[dict(start=0.0, end=12.0, active=True)],
+            generation=None,
+        ),
+        "candidate": dict(
+            flags=[],
+            audits=[dict(block_id="target", serious_issue_ids=[])],
+            review_intervals=[dict(start=0.0, end=12.0, active=True)],
+            generation=None,
+        ),
+    }
+    arms = {alias: by_arm[arm] for alias, arm in e.report["blinded_order"]["heldout-1"].items()}
+    response = await client.post(url, json=judgment_payload(arms=arms), headers=headers(token))
+    assert response.status_code == 201, response.text
+    await db.refresh(e)
+    report = build_report(e)
+    assert report["label_coverage"] == {"heldout_examples": 0, "labeled_examples": 0, "unknown_examples": 0}
+    assert report["conclusion"] == "inconclusive"
+    assert report["assessment"]["candidate"]["measured_examples"] == 0
+    assert report["examples"] == []
+    assert report["exclusions"][0]["example_id"] == "heldout-1"
+
+
+@pytest.mark.parametrize("kind", ["development_sources", "guidance"])
+async def test_historical_exclusion_sources_block_new_holdouts_and_remain_development(
+    client, admin_token, completed_review, db_session, kind
+):
+    root, historical = await create(client, admin_token, completed_review, historical_evidence_payload(kind))
+    historical_row = await db_session.get(DocsReviewExperiment, historical["id"])
+    assert historical_row.independent_labels == [], "History must apply even without prior human labels"
+    payload = experiment_payload(client_request_id="later-heldout")
+    response = await client.post(root + "/experiments", json=payload, headers=headers(admin_token))
+    assert response.status_code == 409, "Historical supplied guidance/development sources cannot become unseen"
+    matches = response.json()["detail"]["matches"]
+    assert any(payload["evaluation_examples"][0]["source_text"] in m["development_source"] for m in matches)
+    await assert_development_cannot_improve_report(client, admin_token, completed_review, db_session, payload)
+
+
+async def assert_preexecution_contamination_is_excluded(client, token, completed, db, view):
+    from app.services.docs_review.evaluation import build_report
+
+    e = await db.get(DocsReviewExperiment, view["id"])
+    frozen = copy.deepcopy((e.baseline_input, e.candidate_input, e.evaluation_examples))
+
+    async def forbidden(**kwargs):
+        pytest.fail("Contaminated heldouts must fail before reservation or provider dispatch")
+
+    e, result = await run_experiment(db, completed, e.id, forbidden)
+    assert result["status"] == "failed"
+    assert e.report["execution"]["error_code"] == "holdout_no_longer_unseen"
+    assert e.report["execution"]["provider_calls"] == 0
+    assert await db.get(Setting, "DOCS_REVIEW_PILOT_RESERVED_USD") is None
+    assert (e.baseline_input, e.candidate_input, e.evaluation_examples) == frozen
+    report = build_report(e)
+    assert report["label_coverage"]["heldout_examples"] == 0
+    assert report["conclusion"] == "inconclusive"
+    assert report["exclusions"][0]["example_id"] == "heldout-1"
+    assert report["exclusions"][0]["matches"]
+    public = (
+        await client.get(f"/api/docs-review/projects/{completed[0]['id']}/experiments/{e.id}", headers=headers(token))
+    ).json()
+    assert public["examples"][0]["classification"] == "development"
+    assert public["examples"][0]["requested_classification"] == "heldout"
+
+
+@pytest.mark.parametrize("kind", ["development_sources", "guidance"])
+async def test_new_historical_evidence_invalidates_already_frozen_holdout_before_execution(
+    client, admin_token, completed_review, db_session, kind
+):
+    _, waiting = await create(client, admin_token, completed_review)
+    await create(client, admin_token, completed_review, historical_evidence_payload(kind))
+    await assert_preexecution_contamination_is_excluded(client, admin_token, completed_review, db_session, waiting)
+
+
+async def test_new_owner_source_chapter_blocks_creation_or_requires_development_classification(
+    client, admin_token, completed_review, docs_project_payload, db_session
+):
+    source = experiment_payload()["evaluation_examples"][0]["source_text"]
+    await api_fixtures.project(
+        client, admin_token, {**docs_project_payload, "client_request_id": "new-chapter", "source_text": source}
+    )
+    root = f"/api/docs-review/projects/{completed_review[0]['id']}"
+    payload = experiment_payload()
+    response = await client.post(root + "/experiments", json=payload, headers=headers(admin_token))
+    assert response.status_code == 409
+    await assert_development_cannot_improve_report(client, admin_token, completed_review, db_session, payload)
+
+
+async def test_new_owner_source_chapter_invalidates_already_frozen_holdout_before_execution(
+    client, admin_token, completed_review, docs_project_payload, db_session
+):
+    _, waiting = await create(client, admin_token, completed_review)
+    source = experiment_payload()["evaluation_examples"][0]["source_text"]
+    await api_fixtures.project(
+        client, admin_token, {**docs_project_payload, "client_request_id": "new-chapter", "source_text": source}
+    )
+    await assert_preexecution_contamination_is_excluded(client, admin_token, completed_review, db_session, waiting)
