@@ -1,19 +1,19 @@
 # Book 300, Chapter 009 — Google Docs review pilot record
 
 - Record prepared: 2026-09-21; deployment preparation updated 2026-10-28
-- Pilot status: **not run**
-- Scope: personal-account Editor add-on test deployment; disposable Google document only
+- Pilot status: **partially run** — installation, Google authorization, and sidebar rendering observed; chapter review workflow not run
+- Scope: maintainer-controlled Google Workspace Editor add-on test deployment; disposable Google document only
 - Source fixture: Book 300, Chapter 009; English editorial status **unknown**
-- Add-on version/commit used live: **not run**
-- Browser and version: **not run**
-- First Google account type: personal account selected for the pilot; live add-on authorization **not run**
+- Add-on version/commit used live: `a519bea`
+- Browser and version: ChatGPT in-app browser; engine version unavailable
+- First Google account type: organizational Google Workspace account; reviewed manifest scopes authorized
 - Second Google account type: **not run**
-- Disposable document and selected tab: disposable document created (`1HBpMTA-2mIDLWTx9vD4jzwE0MaluivdrUVJW5SpqOOQ`); add-on selection **not run**
+- Disposable document and selected tab: Workspace-owned document `16WiBwR00yfUWpUMqvGYuVqwLdh3_q7JDWD1P8ZL_GNE`, selected `Tab 1`; Editor add-on test deployment opened and rendered its sidebar
 - BITS HTTPS destination/configuration: `https://translation-production-188f.up.railway.app`; `/health` returned `{"status":"ok"}` on 2026-10-28; review enabled and live AI disabled
 - BITS deployment/release identifier: Railway project `docs-review-pilot`, service `dbe37701-f64c-4386-8edc-8122d70f5a39`, source commit `edb074f`
 - Model and verified price schedule: **not run**
 - Run limits and provider/account budget cap: **not run**
-- Reviewer authorization timestamp: **not run**
+- Reviewer authorization timestamp: 2026-10-28T22:18:46+00:00
 
 This record separates automated repository evidence from live Google Docs and human-review evidence. “Passed in an automated test” does not satisfy a live row. Unavailable or unperformed work remains **not run**.
 
@@ -34,7 +34,7 @@ Automated tests used in-memory storage, fake queues/completion clients, and mock
 
 | Required observation | Timestamp | Result | Observed behavior/error and evidence |
 | --- | --- | --- | --- |
-| Selected-document test deployment opens under the first personal account and consent scopes match the reviewed manifest | **not run** | **not run** | **not run** |
+| Selected-document test deployment opens under the first account and consent scopes match the reviewed manifest | 2026-10-28T22:18:46+00:00 | passed | Workspace-owned disposable document opened through the selected-document dry run; Google authorization completed; **BITS · Chapter review** rendered with sign-in, preview, refresh, live-review, lesson, and experiment controls. No BITS credentials were entered and no chapter content was sent. |
 | Empty-tab preview and explicit Chapter 9 load; nonempty-tab refusal | **not run** | **not run** | **not run** |
 | Active and nested tab identity remains bound correctly | **not run** | **not run** | **not run** |
 | Exact named-range selection after text is inserted or edited before the range | **not run** | **not run** | **not run** |
@@ -109,9 +109,9 @@ No lesson improvement is claimed. If there is no eligible confirmed lesson or no
 
 ## Pilot conclusion
 
-- Google Docs add-on feasibility: **not run**
+- Google Docs add-on feasibility: **partial pass** — standalone test deployment, Google authorization, and sidebar rendering work in the Workspace account; chapter loading, highlighting, decisions, and learning remain untested
 - Highlighting usefulness: **not run**
 - Learning-system evidence: **not run**
 - Security/account-isolation evidence: **not run**
 - Decision on a larger trial: **not run**
-- Open failures and follow-up work: live authorization, selected disposable document, real reviewer decision, paid provider run, second personal account, and separate held-out lesson material are all **not run**.
+- Open failures and follow-up work: dedicated BITS reviewer credentials, chapter loading, real reviewer decision, paid provider run, second account, and separate held-out lesson material are all **not run**.
