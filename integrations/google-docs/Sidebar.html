@@ -248,7 +248,7 @@
           appendText(
             root,
             "p",
-            "Load chapter inserts the supplied English only into an otherwise empty selected tab.",
+            "Load chapter inserts the supplied English only into an otherwise empty selected tab. Starting the review is a separate step so Google Docs can finish saving first.",
           );
           var details = appendText(root, "details", "");
           appendText(details, "summary", "Preview supplied English");
@@ -257,7 +257,7 @@
             call(
               "loadChapter",
               [preview.documentId, preview.tabId],
-              renderReview,
+              renderChapterLoaded,
             );
           });
           button(
@@ -275,6 +275,9 @@
             "Check the preview and the selected test tab, then choose an action.",
           );
         });
+      }
+      function renderChapterLoaded(result) {
+        status(result.message);
       }
       function renderReview(review) {
         displayReview(review);

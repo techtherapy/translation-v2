@@ -165,6 +165,15 @@ test("sidebar renders hostile concern as literal text and clears password immedi
   document.getElementById("password").value = "secret";
   c.login();
   assert.equal(passwordDuringCall, "");
+  assert.equal(typeof c.renderChapterLoaded, "function");
+  c.renderChapterLoaded({
+    message:
+      "Chapter loaded. After Google Docs finishes saving, start the example review.",
+  });
+  assert.equal(
+    document.getElementById("status").textContent,
+    "Chapter loaded. After Google Docs finishes saving, start the example review.",
+  );
 });
 
 test("HTTPS allowlist rejects changed origins and redirects without forwarding credentials", () => {

@@ -6,6 +6,14 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.8',
+    date: '2026-10-28',
+    highlights: [
+      'Google Docs now finishes saving a newly loaded chapter before starting its review, preventing partially started reviews',
+      'The Book 300 Chapter 9 pilot now opens six example review cards from the saved document without using live AI',
+    ],
+  },
+  {
     version: '0.24.7',
     date: '2026-10-28',
     highlights: [

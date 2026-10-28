@@ -1,14 +1,14 @@
 # Book 300, Chapter 009 — Google Docs review pilot record
 
 - Record prepared: 2026-09-21; deployment preparation updated 2026-10-28
-- Pilot status: **partially run** — installation, Google authorization, and sidebar rendering observed; chapter review workflow not run
+- Pilot status: **partially run** — installation, Google authorization, dedicated reviewer sign-in, Chapter 9 loading, and six example review cards observed; decision recording and live AI not run
 - Scope: maintainer-controlled Google Workspace Editor add-on test deployment; disposable Google document only
 - Source fixture: Book 300, Chapter 009; English editorial status **unknown**
-- Add-on version/commit used live: `a519bea`
-- Browser and version: ChatGPT in-app browser; engine version unavailable
+- Add-on version used live: release `0.24.8` from the Apps Script Head deployment; parent repository commit `a519bea`
+- Browser and version: Safari for the signed-in workflow; ChatGPT in-app browser for installation; engine versions unavailable
 - First Google account type: organizational Google Workspace account; reviewed manifest scopes authorized
 - Second Google account type: **not run**
-- Disposable document and selected tab: Workspace-owned document `16WiBwR00yfUWpUMqvGYuVqwLdh3_q7JDWD1P8ZL_GNE`, selected `Tab 1`; Editor add-on test deployment opened and rendered its sidebar
+- Disposable document and selected tabs: Workspace-owned document `16WiBwR00yfUWpUMqvGYuVqwLdh3_q7JDWD1P8ZL_GNE`; `Tab 1` preserved the first run and fresh `Tab 2` (`t.vd2j181gpdo4`) exercised the revised two-step flow
 - BITS HTTPS destination/configuration: `https://translation-production-188f.up.railway.app`; `/health` returned `{"status":"ok"}` on 2026-10-28; review enabled and live AI disabled
 - BITS deployment/release identifier: Railway project `docs-review-pilot`, service `dbe37701-f64c-4386-8edc-8122d70f5a39`, source commit `edb074f`
 - BITS account boundary: dedicated `pilot-reviewer` account created with the reviewer role; seeded `admin/admin` login disabled; replacement credentials stored in the maintainer's macOS Keychain and both roles verified on 2026-10-28
@@ -26,7 +26,7 @@ This record separates automated repository evidence from live Google Docs and hu
 | Export endpoint requires authentication and returns data only to the owning BITS user | passed | Same local suite; another authenticated user receives not found |
 | Export CLI sends a bearer session only to an explicit HTTPS BITS origin and fails closed on HTTP/schema errors | passed | Same local suite; no network request left the test process |
 | Affected review export, authentication, evaluation/knowledge, API, job and worker suites | passed | 112 focused backend tests passed locally on 2026-09-22 |
-| Google Docs add-on behavior suite | passed | 29 Node tests passed locally on 2026-09-21; this is simulated Apps Script behavior, not a browser observation |
+| Google Docs add-on behavior suite | passed | 30 Node tests passed locally on 2026-10-28, including the load/save transaction boundary; this is simulated Apps Script behavior, not a browser observation |
 | Complete backend regression suite | previously passed; not repeated after the scoped export fix | 177 tests passed and 1 optional PostgreSQL integration test skipped on 2026-09-21; the final producer/schema changes were covered by the 112 focused tests above |
 
 Automated tests used in-memory storage, fake queues/completion clients, and mock HTTP transport. They did not contact Google, Redis, a model provider, or a deployed BITS service and incurred no provider cost.
@@ -35,10 +35,10 @@ Automated tests used in-memory storage, fake queues/completion clients, and mock
 
 | Required observation | Timestamp | Result | Observed behavior/error and evidence |
 | --- | --- | --- | --- |
-| Selected-document test deployment opens under the first account and consent scopes match the reviewed manifest | 2026-10-28T22:18:46+00:00 | passed | Workspace-owned disposable document opened through the selected-document dry run; Google authorization completed; **BITS · Chapter review** rendered with sign-in, preview, refresh, live-review, lesson, and experiment controls. No BITS credentials were entered and no chapter content was sent. |
-| Empty-tab preview and explicit Chapter 9 load; nonempty-tab refusal | **not run** | **not run** | **not run** |
+| Selected-document test deployment opens under the first account and consent scopes match the reviewed manifest | 2026-10-28T22:18:46+00:00 | passed | Workspace-owned disposable document opened through the selected-document dry run; Google authorization completed; **BITS · Chapter review** rendered with sign-in, preview, refresh, live-review, lesson, and experiment controls. Dedicated `pilot-reviewer` sign-in subsequently completed and the password field was cleared. |
+| Empty-tab preview and explicit Chapter 9 load; nonempty-tab refusal | 2026-10-28T22:42:50+00:00 | partial pass | The first run inserted Chapter 9 into empty `Tab 1`; its same-execution checkpoint read failed closed with “The chapter changed during reading,” and a separate review start then produced six example cards. Release `0.24.8` was installed and retested in fresh empty `Tab 2`: load returned “Chapter loaded. After Google Docs finishes saving, start the example review,” the document reached Saved to Drive, and the separate review action displayed six example cards at checkpoint `7ebca4e4-7b36-4b27-89ed-5cae21af6d40`. Nonempty-tab refusal remains **not run** live. |
 | Active and nested tab identity remains bound correctly | **not run** | **not run** | **not run** |
-| Exact named-range selection after text is inserted or edited before the range | **not run** | **not run** | **not run** |
+| Exact named-range selection after text is inserted or edited before the range | 2026-10-28T22:42:50+00:00 | partial pass | Selecting “Verify the Eightfold Path term mapping” returned “Passage selected. Manuscript text and formatting are unchanged.” Selection after a subsequent edit before the range remains **not run**. |
 | Repeated quotations and supplementary characters select the intended occurrence without changing text or style | **not run** | **not run** | **not run** |
 | Deleted or duplicated range blocks block use and require refresh/reassociation, with no fuzzy reattachment | **not run** | **not run** | **not run** |
 | Paragraph split, merge, or moved text blocks block use and require refresh/reassociation, with no fuzzy reattachment | **not run** | **not run** | **not run** |
@@ -67,7 +67,7 @@ Automated tests used in-memory storage, fake queues/completion clients, and mock
 - Live assessment request timestamp and result: **not run**
 - Experiment/export ID: **not run**
 - Provider calls, tokens, reserved cost and actual cost: **not run**
-- Flagged passages reviewed: **not run**
+- Flagged passages reviewed: six analyst-development example cards rendered; human decisions **not run**
 - Random unflagged sample reviewed: **not run**
 - Naturally observed R1–R4 candidates: **not run**
 - Naturally observed F1/F2 false-alarm cases: **not run**
@@ -110,9 +110,9 @@ No lesson improvement is claimed. If there is no eligible confirmed lesson or no
 
 ## Pilot conclusion
 
-- Google Docs add-on feasibility: **partial pass** — standalone test deployment, Google authorization, and sidebar rendering work in the Workspace account; chapter loading, highlighting, decisions, and learning remain untested
+- Google Docs add-on feasibility: **partial pass** — standalone test deployment, authorization, dedicated reviewer sign-in, the revised two-step chapter load, saved-document checkpointing, six example cards, and exact passage focusing work in the Workspace account; reviewer decisions and learning remain untested
 - Highlighting usefulness: **not run**
 - Learning-system evidence: **not run**
 - Security/account-isolation evidence: **not run**
 - Decision on a larger trial: **not run**
-- Open failures and follow-up work: sidebar sign-in, chapter loading, real reviewer decision, paid provider run, second account, and separate held-out lesson material are all **not run**.
+- Open failures and follow-up work: record a real reviewer decision, test nonempty-tab refusal, exercise range integrity after surrounding edits, test the second account, and supply separate held-out lesson material. Paid provider review remains deliberately disabled and **not run**.

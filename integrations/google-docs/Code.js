@@ -84,7 +84,13 @@ function loadChapter(documentId, tabId) {
       })
       .join("\n"),
   );
-  return beginExampleReview_(binding, fixture);
+  return {
+    documentId: binding.documentId,
+    tabId: binding.tabId,
+    title: fixture.english_title,
+    message:
+      "Chapter loaded. After Google Docs finishes saving, start the example review.",
+  };
 }
 
 function startExampleReview(documentId, tabId) {

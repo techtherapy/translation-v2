@@ -164,6 +164,56 @@ test("explicit chapter load is the only manuscript write and refuses nonempty ta
   assert.equal(writes, 1);
 });
 
+test("chapter load finishes before checkpoint creation reads the document again", () => {
+  let writes = 0;
+  let checkpointReads = 0;
+  const body = {
+    getText: () => "",
+    setText: (text) => {
+      writes++;
+      assert.equal(text, "supplied chapter");
+    },
+    getNumChildren: () => 1,
+    getChild: () => ({
+      getType: () => "PARAGRAPH",
+      getNumChildren: () => 0,
+      getText: () => "",
+      getHeading: () => "NORMAL",
+    }),
+  };
+  const c = load();
+  c.apiRequest_ = (requestPath, method) => {
+    assert.equal(requestPath, "/api/docs-review/development-fixture");
+    assert.equal(method, "get");
+    return {
+      english_title: "Supplied title",
+      target_blocks: [{ text: "supplied chapter" }],
+    };
+  };
+  c.readCheckpoint_ = () => {
+    checkpointReads++;
+    if (checkpointReads > 1)
+      throw new Error("checkpoint creation read during chapter load");
+    return { text: "", blocks: [], revisionId: "before-load" };
+  };
+  c.boundDocument_ = () => ({ tab: { getBody: () => body } });
+
+  const result = c.loadChapter("doc", "tab");
+
+  assert.equal(writes, 1);
+  assert.equal(checkpointReads, 1);
+  assert.equal(
+    JSON.stringify(result),
+    JSON.stringify({
+      documentId: "doc",
+      tabId: "tab",
+      title: "Supplied title",
+      message:
+        "Chapter loaded. After Google Docs finishes saving, start the example review.",
+    }),
+  );
+});
+
 test("decision preview captures both checkpoints; later typing cannot be certified or silently corrected", () => {
   const saved = {};
   const posts = [];
