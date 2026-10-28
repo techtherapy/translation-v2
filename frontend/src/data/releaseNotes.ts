@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.6',
+    date: '2026-10-28',
+    highlights: [
+      'The Google Docs review pilot now connects to its dedicated, verified review service',
+    ],
+  },
+  {
     version: '0.24.5',
     date: '2026-10-28',
     highlights: [

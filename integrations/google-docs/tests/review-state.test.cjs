@@ -79,7 +79,7 @@ test("credentials only go to the exact configured HTTPS deployment; expiry and 4
   assert.equal(requests[0].opts.followRedirects, false);
   assert.equal(
     requests[0].url,
-    "https://translation-production-c3ad.up.railway.app/api/auth/login",
+    "https://translation-production-188f.up.railway.app/api/auth/login",
   );
   user = 1;
   assert.throws(
@@ -178,9 +178,9 @@ test("HTTPS allowlist rejects changed origins and redirects without forwarding c
     },
   });
   for (const base of [
-    "http://translation-production-c3ad.up.railway.app",
+    "http://translation-production-188f.up.railway.app",
     "https://evil.test",
-    "https://translation-production-c3ad.up.railway.app@evil.test",
+    "https://translation-production-188f.up.railway.app@evil.test",
   ]) {
     c.BITS_BASE_URL = base;
     assert.throws(
@@ -190,7 +190,7 @@ test("HTTPS allowlist rejects changed origins and redirects without forwarding c
     );
   }
   assert.equal(calls, 0);
-  c.BITS_BASE_URL = "https://translation-production-c3ad.up.railway.app";
+  c.BITS_BASE_URL = "https://translation-production-188f.up.railway.app";
   assert.throws(
     () =>
       c.apiRequest_("/api/auth/login", "post", { password: "secret" }, true),

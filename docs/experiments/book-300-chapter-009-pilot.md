@@ -1,16 +1,16 @@
 # Book 300, Chapter 009 — Google Docs review pilot record
 
-- Record prepared: 2026-09-21
+- Record prepared: 2026-09-21; deployment preparation updated 2026-10-28
 - Pilot status: **not run**
 - Scope: personal-account Editor add-on test deployment; disposable Google document only
 - Source fixture: Book 300, Chapter 009; English editorial status **unknown**
 - Add-on version/commit used live: **not run**
 - Browser and version: **not run**
-- First Google account type: **not run**
+- First Google account type: personal account selected for the pilot; live add-on authorization **not run**
 - Second Google account type: **not run**
-- Disposable document and selected tab: **not run**
-- BITS HTTPS destination/configuration: **not run**
-- BITS deployment/release identifier: **not run**
+- Disposable document and selected tab: disposable document created (`1HBpMTA-2mIDLWTx9vD4jzwE0MaluivdrUVJW5SpqOOQ`); add-on selection **not run**
+- BITS HTTPS destination/configuration: `https://translation-production-188f.up.railway.app`; `/health` returned `{"status":"ok"}` on 2026-10-28; review enabled and live AI disabled
+- BITS deployment/release identifier: Railway project `docs-review-pilot`, service `dbe37701-f64c-4386-8edc-8122d70f5a39`, source commit `edb074f`
 - Model and verified price schedule: **not run**
 - Run limits and provider/account budget cap: **not run**
 - Reviewer authorization timestamp: **not run**
@@ -62,7 +62,7 @@ Automated tests used in-memory storage, fake queues/completion clients, and mock
 
 - Exact approved destination, model, price schedule and budget shown before enabling live AI: **not run**
 - Provider/account-side cap confirmed: **not run**
-- Worker and feature gates enabled for the selected deployment: **not run**
+- Worker and feature gates enabled for the selected deployment: web and worker services online; `DOCS_REVIEW_ENABLED=true`; `DOCS_REVIEW_LIVE_AI=false` on 2026-10-28
 - Live assessment request timestamp and result: **not run**
 - Experiment/export ID: **not run**
 - Provider calls, tokens, reserved cost and actual cost: **not run**

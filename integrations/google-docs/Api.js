@@ -1,7 +1,7 @@
 /* Deployment configuration is code-reviewed. Never accept a URL from the sidebar. */
-var BITS_BASE_URL = "https://translation-production-c3ad.up.railway.app";
+var BITS_BASE_URL = "https://translation-production-188f.up.railway.app";
 var BITS_ALLOWED_BASE_URLS = [
-  "https://translation-production-c3ad.up.railway.app",
+  "https://translation-production-188f.up.railway.app",
 ];
 
 function tokenExpiry_(token) {

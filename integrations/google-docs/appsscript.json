@@ -12,5 +12,5 @@
     "https://www.googleapis.com/auth/script.container.ui",
     "https://www.googleapis.com/auth/script.external_request"
   ],
-  "urlFetchWhitelist": ["https://translation-production-c3ad.up.railway.app/"]
+  "urlFetchWhitelist": ["https://translation-production-188f.up.railway.app/"]
 }
