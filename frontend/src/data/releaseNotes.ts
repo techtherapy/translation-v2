@@ -10,6 +10,7 @@ const releaseNotes: ReleaseNote[] = [
     date: '2026-10-28',
     highlights: [
       'The Google Docs review pilot has now been installed and authorised in its disposable test document',
+      'The pilot now uses a dedicated reviewer login instead of the original default administrator password',
     ],
   },
   {

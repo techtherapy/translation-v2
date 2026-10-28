@@ -11,6 +11,7 @@
 - Disposable document and selected tab: Workspace-owned document `16WiBwR00yfUWpUMqvGYuVqwLdh3_q7JDWD1P8ZL_GNE`, selected `Tab 1`; Editor add-on test deployment opened and rendered its sidebar
 - BITS HTTPS destination/configuration: `https://translation-production-188f.up.railway.app`; `/health` returned `{"status":"ok"}` on 2026-10-28; review enabled and live AI disabled
 - BITS deployment/release identifier: Railway project `docs-review-pilot`, service `dbe37701-f64c-4386-8edc-8122d70f5a39`, source commit `edb074f`
+- BITS account boundary: dedicated `pilot-reviewer` account created with the reviewer role; seeded `admin/admin` login disabled; replacement credentials stored in the maintainer's macOS Keychain and both roles verified on 2026-10-28
 - Model and verified price schedule: **not run**
 - Run limits and provider/account budget cap: **not run**
 - Reviewer authorization timestamp: 2026-10-28T22:18:46+00:00
@@ -114,4 +115,4 @@ No lesson improvement is claimed. If there is no eligible confirmed lesson or no
 - Learning-system evidence: **not run**
 - Security/account-isolation evidence: **not run**
 - Decision on a larger trial: **not run**
-- Open failures and follow-up work: dedicated BITS reviewer credentials, chapter loading, real reviewer decision, paid provider run, second account, and separate held-out lesson material are all **not run**.
+- Open failures and follow-up work: sidebar sign-in, chapter loading, real reviewer decision, paid provider run, second account, and separate held-out lesson material are all **not run**.
