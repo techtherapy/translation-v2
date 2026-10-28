@@ -6,6 +6,13 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.24.5',
+    date: '2026-10-28',
+    highlights: [
+      'New pilot deployments now prepare an empty database correctly before starting the review service',
+    ],
+  },
+  {
     version: '0.24.4',
     date: '2026-09-22',
     highlights: [

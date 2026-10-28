@@ -37,5 +37,8 @@ alembic history            # show full history
 
 ## Deploy integration
 
-Railway deploys should run `alembic upgrade head` after the container starts
-but before the app begins serving traffic. See `app/main.py` lifespan handler.
+Railway deploys first run `python -m app.core.migration_bootstrap`, which
+creates the historical pre-Alembic tables only when the baseline anchor is
+missing. They then run `alembic upgrade head` before the app begins serving
+traffic. This order supports both established databases and completely empty
+databases without skipping later Alembic revisions.

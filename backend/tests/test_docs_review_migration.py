@@ -39,34 +39,34 @@ async def round_trip(url):
         async with engine.begin() as connection:
             tables = await connection.run_sync(lambda c: inspect(c).get_table_names())
             assert tables == [], "Disposable migration database must be empty; refusing to change it"
-            # The historical baseline is intentionally a no-op. Bootstrap only existing tables.
-            old_tables = [table for table in Base.metadata.sorted_tables if not table.name.startswith("docs_review_")]
-            await connection.run_sync(lambda c: Base.metadata.create_all(c, tables=old_tables))
+        from app.core.migration_bootstrap import bootstrap_baseline_tables
+
+        assert await bootstrap_baseline_tables(engine) is True
+        migrate(url, "upgrade", REVISION)
+        expected = {table.name for table in Base.metadata.tables.values()}
+        async with engine.begin() as connection:
+            tables = set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
+            assert expected <= tables
             await connection.execute(
                 text("INSERT INTO languages (code, name, is_enabled) VALUES ('sentinel', 'Preserve me', true)")
             )
-        migrate(url, "stamp", PREVIOUS)
-        migrate(url, "upgrade", REVISION)
-        expected = {table.name for table in Base.metadata.tables.values() if table.name.startswith("docs_review_")}
-        async with engine.connect() as connection:
-            tables = set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
-            assert expected <= tables
-            assert await connection.scalar(text("SELECT name FROM languages WHERE code = 'sentinel'")) == "Preserve me"
+        assert await bootstrap_baseline_tables(engine) is False
+        docs_review_tables = {name for name in expected if name.startswith("docs_review_")}
         migrate(url, "downgrade", PREVIOUS)
         async with engine.connect() as connection:
             tables = set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
-            assert not expected.intersection(tables)
+            assert not docs_review_tables.intersection(tables)
             assert await connection.scalar(text("SELECT name FROM languages WHERE code = 'sentinel'")) == "Preserve me"
         migrate(url, "upgrade", REVISION)
         async with engine.connect() as connection:
-            assert expected <= set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
+            assert docs_review_tables <= set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
             assert await connection.scalar(text("SELECT name FROM languages WHERE code = 'sentinel'")) == "Preserve me"
         # Leave the explicitly disposable PostgreSQL database intact for inspection.
     finally:
         await engine.dispose()
 
 
-async def test_sqlite_migration_round_trip(tmp_path):
+async def test_sqlite_migration_bootstraps_empty_database(tmp_path):
     await round_trip(f"sqlite+aiosqlite:///{tmp_path / 'migration.db'}")
 
 
