@@ -4,25 +4,36 @@ var BITS_ALLOWED_BASE_URLS = [
   "https://translation-production-188f.up.railway.app",
 ];
 
-function tokenExpiry_(token) {
+function tokenClaims_(token) {
   try {
     var parts = token.split(".");
-    if (parts.length !== 3) return 0;
+    if (parts.length !== 3) return {};
     var claims = JSON.parse(
       Utilities.newBlob(
         Utilities.base64DecodeWebSafe(parts[1]),
       ).getDataAsString(),
     );
-    return typeof claims.exp === "number" ? claims.exp * 1000 : 0;
+    return claims && typeof claims === "object" ? claims : {};
   } catch (_error) {
-    return 0;
+    return {};
   }
+}
+function tokenExpiry_(token) {
+  var claims = tokenClaims_(token);
+  return typeof claims.exp === "number" ? claims.exp * 1000 : 0;
+}
+function expireSession_() {
+  var properties = PropertiesService.getUserProperties();
+  var claims = tokenClaims_(properties.getProperty("bits.jwt"));
+  if (typeof claims.sub === "string" && claims.sub)
+    properties.setProperty("bits.owner", claims.sub);
+  properties.deleteProperty("bits.jwt");
 }
 
 function userToken_() {
   var token = PropertiesService.getUserProperties().getProperty("bits.jwt");
   if (!token || tokenExpiry_(token) <= Date.now()) {
-    signOut();
+    expireSession_();
     throw new Error(
       "Sign in to BITS again; your session is missing or expired.",
     );
@@ -65,7 +76,7 @@ function apiRequest_(path, method, payload, loginRequest) {
   }
   var status = response.getResponseCode();
   if (status === 401) {
-    signOut();
+    expireSession_();
     throw new Error("Sign in to BITS again; your session was rejected.");
   }
   // Do not reflect provider responses or transport errors: they may contain secrets.
@@ -96,7 +107,7 @@ function apiRequest_(path, method, payload, loginRequest) {
 }
 
 function signIn(username, password) {
-  signOut();
+  expireSession_();
   var response = apiRequest_(
     "/api/auth/login",
     "post",
@@ -104,17 +115,31 @@ function signIn(username, password) {
     true,
   );
   var token = response.access_token;
-  if (typeof token !== "string" || tokenExpiry_(token) <= Date.now())
+  var owner = tokenClaims_(token).sub;
+  if (
+    typeof token !== "string" ||
+    tokenExpiry_(token) <= Date.now() ||
+    typeof owner !== "string" ||
+    !owner
+  )
     throw new Error("BITS did not return an expiring session.");
-  PropertiesService.getUserProperties().setProperty("bits.jwt", token);
+  var properties = PropertiesService.getUserProperties();
+  // Resume private evidence only after the backend authenticates the same owner.
+  if (properties.getProperty("bits.owner") !== owner) signOut();
+  properties.setProperty("bits.owner", owner);
+  properties.setProperty("bits.jwt", token);
   return { signedIn: true };
 }
 
 function signOut() {
   var properties = PropertiesService.getUserProperties();
-  ["bits.jwt", "bits.binding", "bits.pending"].forEach(function (key) {
-    properties.deleteProperty(key);
-  });
+  Object.keys(properties.getProperties())
+    .filter(function (key) {
+      return key.indexOf("bits.") === 0;
+    })
+    .forEach(function (key) {
+      properties.deleteProperty(key);
+    });
   return { signedIn: false };
 }
 

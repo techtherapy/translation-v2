@@ -88,6 +88,7 @@ class DecisionRequest(StrictModel):
     item_id: str = Field(min_length=1)
     base_snapshot_id: str = Field(min_length=1)
     reviewed_snapshot_id: str = Field(min_length=1)
+    context_snapshot_id: str | None = Field(default=None, min_length=1)
     disposition: Literal[
         "confirmed_issue",
         "no_issue",
@@ -95,6 +96,8 @@ class DecisionRequest(StrictModel):
         "needs_another_opinion",
         "audit_no_issue",
         "audit_found_issue",
+        "deferred",
+        "reopened",
     ]
     note: str
 

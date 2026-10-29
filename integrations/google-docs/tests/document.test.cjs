@@ -703,10 +703,17 @@ test("closing or hiding sidebar cancels polling and prevents an in-flight respon
   assert.equal(timers.size, 0);
 });
 
-test("live presentation marks earlier versions and retryable queue states without modifying document or binding", () => {
+test("live presentation reports changed text and retryable queue states without modifying document or binding", () => {
   const crypto = require("node:crypto");
   const c = load({
-    PropertiesService: { getUserProperties: () => ({ deleteProperty() {} }) },
+    PropertiesService: {
+      getUserProperties: () => ({
+        deleteProperty() {},
+        getProperty() {
+          return null;
+        },
+      }),
+    },
     Utilities: {
       DigestAlgorithm: { SHA_256: "sha256" },
       Charset: { UTF_8: "utf8" },
@@ -750,7 +757,7 @@ test("live presentation marks earlier versions and retryable queue states withou
   c.reviewRun_ = () => run;
   assert.equal(typeof c.pollReview, "function");
   const result = c.pollReview();
-  assert.match(result.message, /Review of an earlier version/);
+  assert.equal(result.message, "Chapter review");
   assert.equal(result.changed, true);
   assert.equal(result.status, "succeeded");
   run = {

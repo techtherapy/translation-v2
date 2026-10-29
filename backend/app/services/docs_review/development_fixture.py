@@ -51,16 +51,18 @@ async def create_fixture_run(db, owner_id, project_id, request):
     items = []
     for card in fixture["analyst_cards"]:
         audit = card["kind"] == "false_alarm_check"
+        source, explanation = card["source"], card["concern"]
+        assert source in fixture["raw_chinese_section"]
         items.append(
             dict(
                 kind="audit" if audit else "finding",
                 category=None if audit else "meaning",
                 proposed_severity=None if audit else "question",
-                source_spans=[dict(block_id="source", quote=fixture["raw_chinese_section"], occurrence=0)],
+                source_spans=[dict(block_id="source", quote=source, occurrence=0)],
                 target_spans=[dict(block_id=bid, quote=targets[bid], occurrence=0) for bid in CARD_BLOCKS[card["id"]]],
-                explanation=card.get("concern", card.get("example")),
+                explanation=explanation,
                 evidence_ids=[f"analyst_development_example:{card['id']}"],
-                proposed_correction=None,
+                proposed_correction=card.get("proposed_correction"),
             )
         )
     return await repo.complete_run(

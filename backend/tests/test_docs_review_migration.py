@@ -14,7 +14,7 @@ from app.core.database import Base
 
 ROOT = Path(__file__).resolve().parents[1]
 PREVIOUS = "0002_knowledge_base"
-REVISION = "20260921_docs_review"
+REVISION = "0836b75bd292"
 
 
 def migrate(url, *args):
@@ -47,6 +47,8 @@ async def round_trip(url):
         async with engine.begin() as connection:
             tables = set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
             assert expected <= tables
+            columns = await connection.run_sync(lambda c: inspect(c).get_columns("docs_review_decisions"))
+            assert "context_snapshot_id" in {column["name"] for column in columns}
             await connection.execute(
                 text("INSERT INTO languages (code, name, is_enabled) VALUES ('sentinel', 'Preserve me', true)")
             )

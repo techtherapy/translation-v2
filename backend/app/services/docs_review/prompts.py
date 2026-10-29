@@ -4,7 +4,7 @@ import json
 
 from app.schemas.docs_review import LiveReviewAssessment
 
-PROMPT_VERSION = "docs-review-v1"
+PROMPT_VERSION = "docs-review-v2"
 
 
 def build_messages(bundle):
@@ -17,7 +17,12 @@ Consider meaning, terminology, additions, omissions, consistency, and voice cand
 Check coverage across the WHOLE source and WHOLE target chapter, reading across paragraph
 boundaries. Target block boundaries do not imply omissions or one-to-one alignment.
 Unfamiliar lineage language and authorial wordplay are not automatic mistakes.
-Findings are questions for human review, not approved corrections. Do not rewrite text.
+Findings are questions for human review, not approved corrections. Do not rewrite the chapter.
+Explain each concern in one short, plain-language sentence. When a precise correction is
+supported by the source and the finding has exactly one target span, proposed_correction
+may contain the complete replacement for that span. Preserve its unchanged words. Use null
+when uncertain or when multiple target spans are needed. Never add editorial instructions
+or paragraph breaks to proposed_correction. A human must choose to apply every suggestion.
 Quote exact nonempty source and target spans, including their block IDs and zero-based
 nonoverlapping quote occurrence. Multiple source/target spans may support one finding.
 Cite only IDs in supplied_guidance; use an empty evidence_ids array when source and target

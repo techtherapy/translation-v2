@@ -111,6 +111,30 @@ async def run_response(db, run):
         await db.scalars(select(DocsReviewItem).where(DocsReviewItem.run_id == run.id).order_by(DocsReviewItem.id))
     )
     result = {**repo.record_dict(run), "items": [repo.record_dict(item) for item in items]}
+    decisions = list(
+        await db.scalars(
+            select(DocsReviewDecision)
+            .join(DocsReviewItem, DocsReviewDecision.item_id == DocsReviewItem.id)
+            .where(DocsReviewItem.run_id == run.id)
+            .order_by(DocsReviewDecision.created_at, DocsReviewDecision.id)
+        )
+    )
+    snapshots = {
+        s.id: s
+        for s in await db.scalars(
+            select(DocsReviewSnapshot).where(DocsReviewSnapshot.id.in_({d.reviewed_snapshot_id for d in decisions}))
+        )
+    }
+    target_ids = {i.id: {s["block_id"] for s in i.target_spans} for i in items}
+    result["decisions"] = [
+        {
+            **repo.record_dict(d),
+            "reviewed_target_blocks": [
+                b for b in snapshots[d.reviewed_snapshot_id].blocks if b["block_id"] in target_ids[d.item_id]
+            ],
+        }
+        for d in decisions
+    ]
     if run.mode == "live":
         result.pop("raw_response")
         result.update(

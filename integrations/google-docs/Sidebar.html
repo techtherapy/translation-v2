@@ -3,85 +3,304 @@
   <head>
     <base target="_top" />
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
+      :root {
+        --ink: #233b34;
+        --muted: #68766f;
+        --green: #245b47;
+        --line: #e2e7e1;
+        --gold: #b08a3b;
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
+        margin: 0;
+        padding: 16px 14px 28px;
+        background: #fff;
+        color: var(--ink);
         font:
-          14px Georgia,
-          serif;
-        color: #243a36;
-        background: #f7f4eb;
-        margin: 16px;
+          13px/1.45 "Trebuchet MS",
+          sans-serif;
       }
       h1 {
-        font-size: 22px;
+        font:
+          normal 21px Georgia,
+          serif;
+        margin: 0;
+        letter-spacing: -0.4px;
       }
       h2 {
-        font-size: 17px;
+        font-size: 12px;
+        font-weight: normal;
+        color: var(--muted);
+        margin: 22px 0 8px;
       }
-      label {
-        display: block;
-        margin: 10px 0;
-      }
-      input,
-      textarea,
-      select {
-        box-sizing: border-box;
-        width: 100%;
-        padding: 7px;
-        border: 1px solid #9ea99d;
-        background: #fffdf7;
-      }
-      input[type="checkbox"] {
-        width: auto;
-      }
-      button {
-        background: #215a4a;
-        color: white;
-        border: 0;
-        padding: 9px;
-        margin: 5px 5px 5px 0;
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.45;
-        cursor: wait;
-      }
-      article {
-        border-top: 2px solid #bba86e;
-        margin: 20px 0;
-        padding-top: 10px;
-      }
-      pre,
-      blockquote {
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        margin: 10px 0;
-        padding: 10px;
-        background: #ece9de;
+      p {
+        margin: 8px 0;
       }
       small {
         display: block;
-        color: #52665f;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: white;
+        color: var(--ink);
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f1f5f0;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: 3px;
+      }
+      .primary {
+        background: var(--green);
+        color: #fff;
+        border-color: var(--green);
+      }
+      .primary:hover {
+        background: #194332;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      .toolbar button {
+        border: 0;
+        padding: 5px 8px;
+      }
+      #progress {
+        color: var(--muted);
+        margin: 4px 0 16px;
       }
       #status {
+        color: var(--muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      #status:empty {
+        display: none;
+      }
+      article.point {
+        border-bottom: 1px solid var(--line);
+        margin: 0;
+        padding: 0;
+      }
+      .point-toggle {
+        width: 100%;
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        text-align: left;
+        padding: 12px 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+      .point-toggle:hover {
+        background: #f7f9f5;
+      }
+      .point-mark {
+        width: 7px;
+        height: 7px;
+        flex: 0 0 7px;
+        background: var(--gold);
+        border-radius: 50%;
+        margin-top: 6px;
+      }
+      .point-toggle[aria-expanded="true"] .point-mark {
+        background: var(--green);
+      }
+      .point-label {
+        min-width: 0;
+        flex: 1;
+      }
+      .point-title {
+        display: block;
+        font-weight: bold;
+        font-size: 13px;
+      }
+      .point-snippet {
+        display: block;
+        font:
+          13px/1.6 Georgia,
+          serif;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--muted);
+      }
+      .chevron {
+        font-size: 16px;
+        color: var(--muted);
+      }
+      .point-body {
+        padding: 0 0 16px 16px;
+      }
+      .eyebrow {
+        display: block;
+        font-size: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 12px 0 5px;
+      }
+      blockquote {
+        margin: 0;
+        padding: 0;
+        font:
+          15px/1.7 Georgia,
+          serif;
+        overflow-wrap: anywhere;
         white-space: pre-wrap;
-        padding: 8px 0;
+      }
+      .source-quote {
+        padding-left: 10px;
+        border-left: 2px solid #d5ddcf;
+        max-height: 190px;
+        overflow: auto;
+      }
+      .translation {
+        font:
+          15px/1.6 Georgia,
+          serif;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+      del {
+        background: #f6e7e1;
+        color: #96543e;
+        text-decoration-thickness: 1px;
+      }
+      ins {
+        background: #e5f0e5;
+        color: #245b47;
+        text-decoration: none;
+        border-bottom: 1px solid #6e9775;
+      }
+      del + ins {
+        margin-left: 0.2em;
+      }
+      .reason {
+        color: #526459;
+        font-size: 12px;
+        margin: 10px 0 14px;
+      }
+      .actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 8px 0;
+      }
+      .actions .primary {
+        flex-grow: 1;
+      }
+      .quiet {
+        border: 0;
+        color: var(--muted);
+        padding: 5px 0;
+        margin-right: 12px;
+        font-size: 12px;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .receipt {
+        padding: 12px;
+        border: 1px solid #d5e4d4;
+        border-radius: 5px;
+        background: #f6f9f2;
+        margin: 10px 0;
       }
       details {
         margin: 12px 0;
       }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      details.group {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      details.group > summary {
+        color: var(--ink);
+        font-weight: bold;
+      }
+      #settings {
+        margin-top: 26px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      #settings p {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        margin: 10px 0;
+        font-size: 12px;
+      }
+      input,
+      textarea,
+      select {
+        display: block;
+        width: 100%;
+        padding: 7px;
+        border: 1px solid #aab9ad;
+        border-radius: 4px;
+        background: #fff;
+        margin: 4px 0;
+      }
+      input[type="checkbox"] {
+        display: inline;
+        width: auto;
+      }
       textarea {
-        min-height: 65px;
+        min-height: 60px;
+        resize: vertical;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font:
+          13px/1.6 Georgia,
+          serif;
+      }
+      [hidden] {
+        display: none !important;
       }
     </style>
   </head>
   <body>
-    <h1>BITS · Chapter review</h1>
-    <p>
-      Example findings are analyst development material. Live review is
-      available only when a maintainer enables the pilot and its spending
-      limits.
-    </p>
+    <div class="toolbar">
+      <h1>BITS review</h1>
+      <button id="refresh" aria-label="Refresh review" title="Refresh review">
+        ↻
+      </button>
+    </div>
+    <div id="progress">Your chapter, one point at a time.</div>
+    <div id="status" role="status" aria-live="polite"></div>
     <div id="loginPanel">
       <label>BITS username<input id="username" autocomplete="username" /></label
       ><label
@@ -91,97 +310,100 @@
           autocomplete="current-password" /></label
       ><button id="login">Sign in to BITS</button>
     </div>
-    <button id="signout">Sign out</button
-    ><button id="preview">Preview chapter</button
-    ><button id="refresh">Refresh review</button>
-    <details>
-      <summary>Live review of the current chapter</summary>
-      <p>
-        Start an example review to bind the source chapter, then request a fresh
-        review of this tab.
-      </p>
-      <label
-        >Model (required)<input id="liveModel" placeholder="provider/model"
-      /></label>
-      <label
-        >Maximum input tokens<input
-          id="liveInput"
-          type="number"
-          value="20000"
-          min="1"
-      /></label>
-      <label
-        >Maximum output tokens<input
-          id="liveOutput"
-          type="number"
-          value="2000"
-          min="1"
-      /></label>
-      <label
-        >Maximum estimated cost (USD)<input
-          id="liveCost"
-          type="number"
-          value="0.10"
-          min="0.001"
-          step="0.01"
-      /></label>
-      <label
-        >Optional chapter guidance<textarea
-          id="liveGuidance"
-          maxlength="1500"
-        ></textarea>
-      </label>
-      <button id="liveReview">Start or retry live review</button>
-      <small
-        >One assessment call per run. A random audit is a pilot workflow sample,
-        not a quality guarantee.</small
-      >
-    </details>
-    <div id="status" role="status" aria-live="polite"></div>
+
     <div id="chapterPreview"></div>
     <div id="decisionPreview"></div>
     <div id="cards"></div>
-    <div id="lessonPanel"></div>
-    <details>
-      <summary>Reopen a lesson</summary>
-      <label>Lesson ID<input id="lessonId" /></label
-      ><button id="openLesson">Read lesson</button>
+    <details id="settings">
+      <summary>Review settings</summary>
+      <button id="preview">Set up example chapter</button>
+      <button id="signout">Sign out</button>
+      <details>
+        <summary>Live review of the current chapter</summary>
+        <p>
+          Start an example review to bind the source chapter, then request a
+          fresh review of this tab.
+        </p>
+        <label
+          >Model (required)<input id="liveModel" placeholder="provider/model"
+        /></label>
+        <label
+          >Maximum input tokens<input
+            id="liveInput"
+            type="number"
+            value="20000"
+            min="1"
+        /></label>
+        <label
+          >Maximum output tokens<input
+            id="liveOutput"
+            type="number"
+            value="2000"
+            min="1"
+        /></label>
+        <label
+          >Maximum estimated cost (USD)<input
+            id="liveCost"
+            type="number"
+            value="0.10"
+            min="0.001"
+            step="0.01"
+        /></label>
+        <label
+          >Optional chapter guidance<textarea
+            id="liveGuidance"
+            maxlength="1500"
+          ></textarea>
+        </label>
+        <button id="liveReview">Start or retry live review</button>
+        <small
+          >One assessment call per run. A random audit is a pilot workflow
+          sample, not a quality guarantee.</small
+        >
+      </details>
+
+      <div id="lessonPanel"></div>
+      <details>
+        <summary>Reopen a lesson</summary>
+        <label>Lesson ID<input id="lessonId" /></label
+        ><button id="openLesson">Read lesson</button>
+      </details>
+      <details>
+        <summary>Blinded baseline and candidate experiment</summary>
+        <p>
+          Uses the explicit model, guidance and limits above. The cost limit
+          covers both arms and optional generation together. Chapter 9 and all
+          reviewed lesson evidence are development material.
+        </p>
+        <label
+          >Confirmed lesson IDs to test (comma separated; blank returns to
+          baseline)<textarea id="experimentLessons"></textarea>
+        </label>
+        <label
+          >Separate source passage<textarea id="experimentSource"></textarea>
+        </label>
+        <label
+          >Supplied translation<textarea id="experimentTranslation"></textarea>
+        </label>
+        <label
+          >Additional development sources to exclude (one per line)<textarea
+            id="experimentExclusions"
+          ></textarea>
+        </label>
+        <label
+          ><input id="experimentDevelopment" type="checkbox" />Classify as
+          development; exclude from held-out results</label
+        >
+        <label
+          ><input id="experimentGenerate" type="checkbox" />Also compare
+          separately generated drafts</label
+        >
+        <button id="createExperiment">Freeze paired experiment</button>
+        <label>Existing experiment ID<input id="experimentId" /></label
+        ><button id="openExperiment">Read experiment</button>
+      </details>
+      <div id="experimentPanel"></div>
     </details>
-    <details>
-      <summary>Blinded baseline and candidate experiment</summary>
-      <p>
-        Uses the explicit model, guidance and limits above. The cost limit
-        covers both arms and optional generation together. Chapter 9 and all
-        reviewed lesson evidence are development material.
-      </p>
-      <label
-        >Confirmed lesson IDs to test (comma separated; blank returns to
-        baseline)<textarea id="experimentLessons"></textarea>
-      </label>
-      <label
-        >Separate source passage<textarea id="experimentSource"></textarea>
-      </label>
-      <label
-        >Supplied translation<textarea id="experimentTranslation"></textarea>
-      </label>
-      <label
-        >Additional development sources to exclude (one per line)<textarea
-          id="experimentExclusions"
-        ></textarea>
-      </label>
-      <label
-        ><input id="experimentDevelopment" type="checkbox" />Classify as
-        development; exclude from held-out results</label
-      >
-      <label
-        ><input id="experimentGenerate" type="checkbox" />Also compare
-        separately generated drafts</label
-      >
-      <button id="createExperiment">Freeze paired experiment</button>
-      <label>Existing experiment ID<input id="experimentId" /></label
-      ><button id="openExperiment">Read experiment</button>
-    </details>
-    <div id="experimentPanel"></div>
     <script>
       function appendText(parent, tag, text) {
         var node = document.createElement(tag);
@@ -197,7 +419,7 @@
           button.disabled = value;
         });
       }
-      function call(name, args, success) {
+      function call(name, args, success, failure) {
         reviewPoller.stop();
         busy(true);
         var runner = google.script.run
@@ -208,6 +430,9 @@
           .withFailureHandler(function (error) {
             busy(false);
             status(error.message || "Action failed. Please retry.");
+            if (/Sign in to BITS/.test(error.message || ""))
+              document.getElementById("loginPanel").hidden = false;
+            if (failure) failure(error);
           });
         runner[name].apply(runner, args);
       }
@@ -230,7 +455,8 @@
         document.getElementById("password").value = "";
         clearReview();
         call("signIn", [username, password], function () {
-          status("Signed in. Preview the supplied chapter to begin.");
+          document.getElementById("loginPanel").hidden = true;
+          call("resumeReview", [], resumeSession);
         });
         password = "";
       }
@@ -283,92 +509,359 @@
         displayReview(review);
         reviewPoller.start(review.status);
       }
+
+      var currentReview = null,
+        expandedId = null,
+        openData = null,
+        completedId = null;
       function displayReview(review) {
+        currentReview = review;
         clearReview();
-        status(review.message);
-        if (review.queueRetryable) {
-          button(
-            document.getElementById("cards"),
-            "Retry queue delivery",
-            function () {
-              call("retryReviewQueue", [], renderReview);
-            },
-          );
-        }
-        if (review.findingCount !== undefined) {
-          appendText(
-            document.getElementById("cards"),
-            "small",
-            review.findingCount +
-              " findings · " +
-              review.auditCount +
-              " random audits. Unflagged passages remain unreviewed.",
-          );
-        }
-        appendText(
-          document.getElementById("cards"),
-          "small",
-          "Assessed checkpoint: " + review.baseId,
-        );
-        review.items.forEach(function (item) {
-          var card = appendText(
-            document.getElementById("cards"),
-            "article",
-            "",
-          );
-          button(card, item.title, function () {
-            call("focusItem", [item.id], function () {
+        document.getElementById("loginPanel").hidden = true;
+        var items = review.items || [],
+          remaining = items.filter(function (i) {
+            return i.state !== "reviewed";
+          }).length;
+        document.getElementById("progress").textContent =
+          remaining + " left to review · " + items.length + " points";
+        status(review.message || "");
+        var root = document.getElementById("cards");
+        if (review.pendingAction) {
+          var recovery = appendText(root, "div", "");
+          recovery.className = "receipt";
+          appendText(recovery, "p", "A review action needs to finish saving.");
+          button(recovery, "Retry saving", function () {
+            reviewAction("finishReviewSuggestion", []);
+          });
+          button(recovery, "Dismiss save", function () {
+            call("dismissPendingReviewAction", [], function (r) {
+              completedId = null;
+              expandedId = null;
+              openData = null;
+              displayReview(r);
               status(
-                "Passage selected. Manuscript text and formatting are unchanged.",
+                "The document was kept as it is. Open the point to review its current wording.",
               );
             });
           });
-          appendText(
-            card,
-            "small",
-            item.provenance + " · human confirmed: " + item.humanConfirmed,
-          );
-          var source = appendText(card, "details", "");
-          appendText(source, "summary", "Source chapter");
-          appendText(source, "blockquote", item.source);
-          appendText(card, "h2", "Exact translation quote");
-          appendText(card, "blockquote", item.target);
-          appendText(card, "p", item.concern);
-          appendText(card, "small", "Evidence: " + item.evidence);
-          appendText(card, "p", item.action);
-          var label = appendText(card, "label", "Decision");
-          var select = appendText(label, "select", "");
-          var options =
-            item.kind === "audit"
-              ? [
-                  ["audit_no_issue", "Audit: no issue"],
-                  ["audit_found_issue", "Audit: issue found"],
-                ]
-              : [
-                  ["confirmed_issue", "Confirmed issue"],
-                  ["no_issue", "No issue"],
-                  ["corrected", "Corrected"],
-                  ["needs_another_opinion", "Needs another opinion"],
-                ];
-          options.forEach(function (option) {
-            var node = appendText(select, "option", option[1]);
-            node.value = option[0];
+        }
+        if (review.queueRetryable)
+          button(root, "Retry review", function () {
+            call("retryReviewQueue", [], renderReview);
           });
-          var noteLabel = appendText(
-            card,
-            "label",
-            "Review note (up to 5,000 characters; long notes may need shortening)",
+        var completed = items.find(function (i) {
+          return i.id === completedId;
+        });
+        if (completed) {
+          var receipt = appendText(root, "div", "");
+          receipt.className = "receipt";
+          appendText(
+            receipt,
+            "strong",
+            completed.state === "later" ? "Saved for later" : "Review saved",
           );
-          var note = appendText(noteLabel, "textarea", "");
-          note.maxLength = 5000;
-          button(card, "Preview decision", function () {
-            call(
-              "prepareDecision",
-              [item.id, select.value, note.value],
-              renderDecision,
-            );
+          appendText(receipt, "small", completed.title);
+          var actions = appendText(receipt, "div", "");
+          actions.className = "actions";
+          if (completed.canUndo)
+            button(actions, "Undo", function () {
+              reviewAction("undoReviewAction", [completed.id]);
+            });
+          else if (completed.state === "reviewed")
+            button(actions, "Reopen", function () {
+              reviewAction("reopenReviewItem", [completed.id]);
+            });
+          button(actions, "Next", nextItem).className = "primary";
+        }
+        var pending = items.filter(function (i) {
+          return (
+            i.state !== "reviewed" &&
+            i.state !== "later" &&
+            i.id !== completedId
+          );
+        });
+        var findings = pending.filter(function (i) {
+          return i.kind !== "audit";
+        });
+        if (findings.length) appendText(root, "h2", "Points to review");
+        findings.forEach(function (i) {
+          renderPoint(root, i);
+        });
+        var checks = pending.filter(function (i) {
+          return i.kind === "audit";
+        });
+        if (checks.length) {
+          appendText(
+            root,
+            "h2",
+            review.example ? "Practice checks" : "Spot checks",
+          );
+          checks.forEach(function (i) {
+            renderPoint(root, i);
+          });
+        }
+        [
+          ["later", "Do later"],
+          ["reviewed", "Reviewed"],
+        ].forEach(function (group) {
+          var values = items.filter(function (i) {
+            return i.state === group[0] && i.id !== completedId;
+          });
+          if (!values.length) return;
+          var details = appendText(root, "details", "");
+          details.className = "group";
+          appendText(details, "summary", group[1] + " · " + values.length);
+          if (
+            values.some(function (i) {
+              return i.id === expandedId;
+            })
+          )
+            details.open = true;
+          values.forEach(function (i) {
+            renderPoint(details, i);
           });
         });
+        if (!remaining && items.length) {
+          appendText(root, "p", "All listed points reviewed.");
+          appendText(
+            root,
+            "small",
+            "This covers the listed points, not approval of the whole chapter.",
+          );
+        }
+        if (
+          !items.length &&
+          ["completed", "succeeded"].indexOf(review.status) >= 0
+        )
+          appendText(root, "p", "No review points were returned.");
+        if (review.example)
+          appendText(
+            root,
+            "small",
+            "Prepared examples for trying the review flow.",
+          );
+      }
+      function chooseItem(id) {
+        if (currentReview && currentReview.pendingAction) {
+          status("Finish or dismiss the pending save first.");
+          return;
+        }
+        if (expandedId === id && openData) {
+          expandedId = null;
+          openData = null;
+          displayReview(currentReview);
+          return;
+        }
+        completedId = null;
+        status("Opening passage…");
+        call("openReviewItem", [id], function (data) {
+          expandedId = id;
+          openData = data;
+          displayReview(currentReview);
+          var heading = document.getElementById("point-" + id);
+          if (heading) heading.focus();
+        });
+      }
+      function renderDiff(parent, before, after) {
+        var a = Array.from(before),
+          b = Array.from(after),
+          start = 0,
+          end = 0;
+        while (start < a.length && start < b.length && a[start] === b[start])
+          start++;
+        while (
+          end < a.length - start &&
+          end < b.length - start &&
+          a[a.length - 1 - end] === b[b.length - 1 - end]
+        )
+          end++;
+        appendText(parent, "span", a.slice(0, start).join(""));
+        if (a.length - start - end)
+          appendText(parent, "del", a.slice(start, a.length - end).join(""));
+        if (b.length - start - end)
+          appendText(parent, "ins", b.slice(start, b.length - end).join(""));
+        appendText(parent, "span", a.slice(a.length - end).join(""));
+      }
+      function renderPoint(parent, item) {
+        var article = appendText(parent, "article", "");
+        article.className = "point";
+        var toggle = button(article, "", function () {
+          chooseItem(item.id);
+        });
+        toggle.className = "point-toggle";
+        toggle.id = "point-" + item.id;
+        var isOpen = expandedId === item.id && openData;
+        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        toggle.setAttribute("aria-controls", "body-" + item.id);
+        appendText(toggle, "span", "").className = "point-mark";
+        var label = appendText(toggle, "span", "");
+        label.className = "point-label";
+        appendText(label, "span", item.title).className = "point-title";
+        appendText(label, "span", item.target).className = "point-snippet";
+        appendText(toggle, "span", isOpen ? "−" : "+").className = "chevron";
+        if (!isOpen) return;
+        var body = appendText(article, "div", "");
+        body.className = "point-body";
+        body.id = "body-" + item.id;
+        appendText(body, "span", "Chinese source").className = "eyebrow";
+        var source = appendText(body, "blockquote", item.source);
+        source.className = "source-quote";
+        source.lang = "zh";
+        if (item.sourceContext) {
+          var context = appendText(body, "details", "");
+          appendText(context, "summary", "More source context");
+          appendText(context, "blockquote", item.sourceContext);
+        }
+        appendText(
+          body,
+          "span",
+          openData.suggestion ? "Suggested change" : "In the document",
+        ).className = "eyebrow";
+        var translation = appendText(body, "div", "");
+        translation.className = "translation";
+        if (openData.suggestion)
+          renderDiff(translation, openData.currentTarget, openData.suggestion);
+        else translation.textContent = openData.currentTarget;
+        appendText(body, "p", item.summary || item.concern).className =
+          "reason";
+        if (item.reviewedChanged)
+          appendText(
+            body,
+            "small",
+            "Edited since your last review. Check the current wording.",
+          );
+        else if (openData.changed)
+          appendText(
+            body,
+            "small",
+            "This passage has changed since the original review.",
+          );
+        if (item.state === "reviewed") {
+          var actions = appendText(body, "div", "");
+          actions.className = "actions";
+          if (item.canUndo)
+            button(actions, "Undo", function () {
+              reviewAction("undoReviewAction", [item.id]);
+            });
+          button(actions, "Reopen", function () {
+            reviewAction("reopenReviewItem", [item.id]);
+          });
+          var learning = appendText(body, "details", "");
+          appendText(learning, "summary", "Learning options");
+          button(learning, "Review reusable guidance", function () {
+            document.getElementById("settings").open = true;
+            renderLearningChoice(item.latestDecision);
+          });
+          return;
+        }
+        var noteDetails = appendText(body, "details", "");
+        appendText(noteDetails, "summary", "Add a note");
+        var noteLabel = appendText(noteDetails, "label", "Review note");
+        var note = appendText(noteLabel, "textarea", "");
+        note.maxLength = 5000;
+        var actions = appendText(body, "div", "");
+        actions.className = "actions";
+        if (openData.suggestion)
+          button(actions, "Use suggestion", function () {
+            reviewAction("applyReviewSuggestion", [
+              item.id,
+              openData.contextId,
+              note.value,
+            ]);
+          }).className = "primary";
+        button(
+          actions,
+          item.kind === "audit" ? "Looks right" : "Keep wording",
+          function () {
+            reviewAction("completeReviewItem", [
+              item.id,
+              openData.contextId,
+              "keep",
+              note.value,
+            ]);
+          },
+        );
+        button(body, "Done editing", function () {
+          reviewAction("completeReviewItem", [
+            item.id,
+            openData.contextId,
+            "done",
+            note.value,
+          ]);
+        }).className = "quiet";
+        button(body, "Do later", function () {
+          reviewAction("completeReviewItem", [
+            item.id,
+            openData.contextId,
+            "later",
+            note.value,
+          ]);
+        }).className = "quiet";
+        var evidence = appendText(body, "details", "");
+        appendText(evidence, "summary", "Details");
+        appendText(
+          evidence,
+          "small",
+          item.evidence || "Source and translation",
+        );
+        if (item.action) appendText(evidence, "p", item.action);
+      }
+      function reviewAction(name, args) {
+        status(
+          name === "applyReviewSuggestion"
+            ? "Applying suggestion…"
+            : "Saving review…",
+        );
+        call(
+          name,
+          args,
+          function (result) {
+            if (result.pending) {
+              reviewAction("finishReviewSuggestion", []);
+              return;
+            }
+            if (result.decision && result.decision.disposition === "reopened") {
+              completedId = null;
+              expandedId = null;
+              openData = null;
+              displayReview(result.review);
+              chooseItem(result.itemId);
+              return;
+            }
+            completedId = result.itemId;
+            expandedId = null;
+            openData = null;
+            displayReview(result.review);
+            status("Saved. Your feedback is recorded.");
+          },
+          function (error) {
+            call("refreshReview", [], function (review) {
+              displayReview(review);
+              status(error.message || "Save interrupted. Please retry.");
+            });
+          },
+        );
+      }
+      function nextItem() {
+        var previous = currentReview.items.find(function (i) {
+          return i.id === completedId;
+        });
+        var pending = currentReview.items.filter(function (i) {
+          return i.state === "pending" && i.id !== completedId;
+        });
+        var next =
+          pending.find(function (i) {
+            return !previous || i.order > previous.order;
+          }) || pending[0];
+        if (!next)
+          next = currentReview.items.find(function (i) {
+            return i.state === "later" && i.id !== completedId;
+          });
+        completedId = null;
+        expandedId = null;
+        openData = null;
+        displayReview(currentReview);
+        if (next) chooseItem(next.id);
       }
       function renderDecision(preview) {
         var root = document.getElementById("decisionPreview");
@@ -1171,8 +1664,28 @@
         document.getElementById("password").value = "";
         clearReview();
         call("signOut", [], function () {
+          currentReview = null;
+          expandedId = null;
+          openData = null;
+          completedId = null;
+          document.getElementById("loginPanel").hidden = false;
+          document.getElementById("progress").textContent =
+            "Sign in to start reviewing.";
           status("Signed out of BITS.");
         });
+      });
+      function resumeSession(session) {
+        document.getElementById("loginPanel").hidden = session.signedIn;
+        if (session.review) renderReview(session.review);
+        else
+          status(
+            session.signedIn
+              ? "Open Review settings to set up the example chapter."
+              : "Sign in to start reviewing.",
+          );
+      }
+      document.addEventListener("DOMContentLoaded", function () {
+        call("resumeReview", [], resumeSession);
       });
     </script>
   </body>

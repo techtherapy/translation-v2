@@ -46,7 +46,10 @@ test("credentials only go to the exact configured HTTPS deployment; expiry and 4
   const token =
     "e30." +
     Buffer.from(
-      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 600 }),
+      JSON.stringify({
+        sub: "owner",
+        exp: Math.floor(Date.now() / 1000) + 600,
+      }),
     ).toString("base64url") +
     ".sig";
   const c = load("Api.js", {
@@ -55,6 +58,7 @@ test("credentials only go to the exact configured HTTPS deployment; expiry and 4
         getProperty: (k) => stores[user][k] || null,
         setProperty: (k, v) => (stores[user][k] = v),
         deleteProperty: (k) => delete stores[user][k],
+        getProperties: () => ({ ...stores[user] }),
       }),
     },
     Utilities: {
@@ -75,7 +79,7 @@ test("credentials only go to the exact configured HTTPS deployment; expiry and 4
   assert.throws(() => c.apiRequest_("https://evil.test/path", "get"), /path/);
   c.signIn("reviewer", "secret");
   assert.equal(Object.values(stores[0]).includes("secret"), false);
-  assert.equal(Object.keys(stores[0]).length, 1);
+  assert.equal(Object.keys(stores[0]).length, 2);
   assert.equal(requests[0].opts.followRedirects, false);
   assert.equal(
     requests[0].url,
@@ -92,7 +96,8 @@ test("credentials only go to the exact configured HTTPS deployment; expiry and 4
     () => c.apiRequest_("/api/docs-review/development-fixture", "get"),
     /Sign in/,
   );
-  assert.equal(Object.keys(stores[0]).length, 0);
+  assert.equal(stores[0]["bits.jwt"], undefined);
+  assert.equal(stores[0]["bits.owner"], "owner");
   status = 200;
   c.signIn("reviewer", "secret");
   c.signOut();
@@ -206,4 +211,65 @@ test("HTTPS allowlist rejects changed origins and redirects without forwarding c
     /302/,
   );
   assert.equal(calls, 1);
+});
+
+test("expired or rejected sessions preserve pending recovery only for the same signed-in account", () => {
+  const token = (sub, expired = false) =>
+    "e30." +
+    Buffer.from(
+      JSON.stringify({
+        sub,
+        exp: expired ? 1 : Math.floor(Date.now() / 1000) + 600,
+      }),
+    ).toString("base64url") +
+    ".sig";
+  for (const mode of ["expiry", "401"]) {
+    const saved = {
+      "bits.jwt": token("owner", mode === "expiry"),
+      "bits.binding": "binding",
+      "bits.action": "write-receipt",
+      "bits.context": "context",
+      "bits.undo:r:i": "undo",
+    };
+    let httpStatus = mode === "401" ? 401 : 200,
+      newOwner = "owner";
+    const c = load("Api.js", {
+      PropertiesService: {
+        getUserProperties: () => ({
+          getProperty: (k) => saved[k] || null,
+          setProperty: (k, v) => (saved[k] = v),
+          deleteProperty: (k) => delete saved[k],
+          getProperties: () => ({ ...saved }),
+        }),
+      },
+      Utilities: {
+        base64DecodeWebSafe: (s) => Buffer.from(s, "base64url"),
+        newBlob: (b) => ({ getDataAsString: () => b.toString() }),
+      },
+      UrlFetchApp: {
+        fetch: () => ({
+          getResponseCode: () => httpStatus,
+          getContentText: () =>
+            JSON.stringify({ access_token: token(newOwner) }),
+        }),
+      },
+    });
+    assert.throws(
+      () => c.apiRequest_("/api/docs-review/development-fixture", "get"),
+      /Sign in/,
+    );
+    assert.equal(saved["bits.jwt"], undefined);
+    assert.equal(saved["bits.action"], "write-receipt");
+    httpStatus = 200;
+    c.signIn("owner", "password");
+    assert.equal(saved["bits.binding"], "binding");
+    assert.equal(saved["bits.action"], "write-receipt");
+    newOwner = "different";
+    c.signIn("different", "password");
+    assert.equal(saved["bits.action"], undefined);
+    assert.equal(saved["bits.binding"], undefined);
+    assert.equal(saved["bits.undo:r:i"], undefined);
+    c.signOut();
+    assert.deepEqual(saved, {});
+  }
 });

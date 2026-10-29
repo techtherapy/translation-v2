@@ -23,6 +23,38 @@ SCOPE = dict(
 )
 
 
+async def test_reopened_decision_cannot_seed_or_confirm_guidance(client, admin_token, completed_review):
+    root, payload, response = await propose(client, admin_token, completed_review)
+    lesson = response.json()
+    _, s, _, item = completed_review
+    reopened = await client.post(
+        root + "/decisions",
+        headers=headers(admin_token),
+        json={
+            **decision_payload(s, item),
+            "client_request_id": "reopen",
+            "context_snapshot_id": s["id"],
+            "disposition": "reopened",
+        },
+    )
+    assert reopened.status_code == 201
+    again = await client.post(
+        root + "/lessons", headers=headers(admin_token), json={**payload, "client_request_id": "second-lesson"}
+    )
+    assert again.status_code == 409
+    confirm = await client.post(
+        root + f"/lessons/{lesson['id']}/confirm",
+        headers=headers(admin_token),
+        json={
+            "client_request_id": "confirm",
+            "expected_content_hash": lesson["content_hash"],
+            "expected_conflict_hash": lesson["conflict_hash"],
+            "conflict_resolutions": {},
+        },
+    )
+    assert confirm.status_code == 409
+
+
 async def propose(client, token, completed, **changes):
     p, s, _, item = completed
     root = f"/api/docs-review/projects/{p['id']}"

@@ -1,4 +1,74 @@
 /* Pure functions: no Google services or module wrapper. */
+function textPatch_(before, after) {
+  if (before === after) return null;
+  // Compare code points, then convert back to the UTF-16 offsets used by Docs.
+  var a = Array.from(before),
+    b = Array.from(after),
+    start = 0,
+    tail = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  while (
+    tail < a.length - start &&
+    tail < b.length - start &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  )
+    tail++;
+  return {
+    start: a.slice(0, start).join("").length,
+    remove: a.slice(start, a.length - tail).join(""),
+    insert: b.slice(start, b.length - tail).join(""),
+  };
+}
+
+function suggestionPlan_(base, current, item) {
+  if (
+    item.target_spans.length !== 1 ||
+    typeof item.proposed_correction !== "string" ||
+    !item.proposed_correction.trim() ||
+    /[\r\n]/.test(item.proposed_correction)
+  )
+    return null;
+  var span = item.target_spans[0];
+  var index = base.blocks.findIndex(function (b) {
+    return b.block_id === span.block_id;
+  });
+  if (
+    index < 0 ||
+    !current.blocks[index] ||
+    current.blocks[index].text !== base.blocks[index].text
+  )
+    return null;
+  var before = current.blocks[index].text;
+  var offsets = quoteOffsets_(before, span.quote, span.occurrence);
+  var after =
+    before.slice(0, offsets.start) +
+    item.proposed_correction +
+    before.slice(offsets.end + 1);
+  return before === after
+    ? null
+    : { index: index, before: before, after: after };
+}
+
+function latestDecision_(itemId, decisions) {
+  return (
+    (decisions || [])
+      .filter(function (d) {
+        return d.item_id === itemId;
+      })
+      .pop() || null
+  );
+}
+function itemReviewState_(itemId, decisions) {
+  var latest = latestDecision_(itemId, decisions);
+  if (!latest || latest.disposition === "reopened") return "pending";
+  if (
+    latest.disposition === "deferred" ||
+    latest.disposition === "needs_another_opinion"
+  )
+    return "later";
+  return "reviewed";
+}
+
 function decisionState(baseHash, currentHash, pendingSuggestions, disposition) {
   if (pendingSuggestions) return "resolve_suggestions";
   if (baseHash === currentHash) return "ready";

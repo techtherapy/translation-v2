@@ -53,6 +53,338 @@ function selectedItem_(run, itemId) {
   return item;
 }
 
+// A single pending action survives a lost response without repeating a manuscript edit.
+function reviewProperty_(name, value) {
+  var properties = PropertiesService.getUserProperties();
+  if (arguments.length === 1)
+    return JSON.parse(properties.getProperty(name) || "null");
+  if (value === null) {
+    properties.deleteProperty(name);
+    return;
+  }
+  var json = JSON.stringify(value);
+  if (Utilities.newBlob(json).getBytes().length > 8000)
+    throw new Error(
+      "This change is too large for one-click editing. Edit it in the document.",
+    );
+  properties.setProperty(name, json);
+}
+function withReviewLock_(action) {
+  var lock = LockService.getDocumentLock();
+  if (!lock || !lock.tryLock(5000))
+    throw new Error("Another review action is saving. Try again shortly.");
+  try {
+    return action();
+  } finally {
+    lock.releaseLock();
+  }
+}
+function snapshotCurrent_(binding, base, current, requestId) {
+  verifyBlockAnchors_(binding, base, boundDocument_(binding).tab);
+  return apiRequest_(projectPath_(binding) + "/snapshots", "post", {
+    client_request_id: requestId || Utilities.getUuid(),
+    observed_revision_id: current.revisionId,
+    suggestions_pending: false,
+    blocks: current.blocks.map(function (b, index) {
+      return {
+        block_id: base.blocks[index].block_id,
+        text: b.text,
+        kind: b.kind,
+        named_range_id: binding.blockAnchors[index],
+      };
+    }),
+  });
+}
+function assertActionBinding_(binding, action) {
+  if (
+    !action ||
+    action.projectId !== binding.projectId ||
+    action.runId !== binding.runId
+  )
+    throw new Error("Open this review point again.");
+}
+function openReviewItem(itemId) {
+  return withReviewLock_(function () {
+    if (reviewProperty_("bits.action"))
+      throw new Error("Finish or dismiss the pending save first.");
+    var binding = binding_(),
+      base = baseSnapshot_(binding),
+      run = reviewRun_(binding);
+    var item = selectedItem_(run, itemId),
+      current = readCheckpoint_(binding);
+    var context = snapshotCurrent_(binding, base, current);
+    if (readCheckpoint_(binding).text !== current.text)
+      throw new Error("The document changed. Open the point again.");
+    selectCurrentPassage_(binding, base, item, current);
+    var plan = suggestionPlan_(base, context, item);
+    reviewProperty_("bits.context", {
+      projectId: binding.projectId,
+      runId: binding.runId,
+      itemId: itemId,
+      contextId: context.id,
+    });
+    return {
+      id: itemId,
+      contextId: context.id,
+      currentTarget: item.target_spans
+        .map(function (span) {
+          var index = base.blocks.findIndex(function (b) {
+            return b.block_id === span.block_id;
+          });
+          return current.blocks[index].text === base.blocks[index].text
+            ? span.quote
+            : current.blocks[index].text;
+        })
+        .join("\n\n"),
+      suggestion: plan ? item.proposed_correction : null,
+      changed: item.target_spans.some(function (span) {
+        var index = base.blocks.findIndex(function (b) {
+          return b.block_id === span.block_id;
+        });
+        return current.blocks[index].text !== base.blocks[index].text;
+      }),
+    };
+  });
+}
+function openedContext_(binding, itemId, contextId) {
+  var opened = reviewProperty_("bits.context");
+  assertActionBinding_(binding, opened);
+  if (opened.itemId !== itemId || opened.contextId !== contextId)
+    throw new Error("This point was opened elsewhere. Open it again.");
+  return apiRequest_(
+    projectPath_(binding) + "/snapshots/" + opened.contextId,
+    "get",
+  );
+}
+function newAction_(binding, item, context, disposition, note, current) {
+  return {
+    projectId: binding.projectId,
+    runId: binding.runId,
+    itemId: item.id,
+    contextId: context.id,
+    disposition: disposition,
+    note: note || "",
+    requestId: Utilities.getUuid(),
+    snapshotRequestId: Utilities.getUuid(),
+    beforeHash: checkpointHash_(current.text),
+    afterHash: checkpointHash_(current.text),
+  };
+}
+function completeReviewItem(itemId, contextId, actionName, note) {
+  return withReviewLock_(function () {
+    if (reviewProperty_("bits.action"))
+      throw new Error("Finish or dismiss the pending save first.");
+    var binding = binding_(),
+      base = baseSnapshot_(binding),
+      run = reviewRun_(binding);
+    var item = selectedItem_(run, itemId),
+      context = openedContext_(binding, itemId, contextId);
+    var current = readCheckpoint_(binding),
+      disposition;
+    if (typeof note !== "string" || note.length > 5000)
+      throw new Error("Keep notes under 5,000 characters.");
+    if (actionName === "keep")
+      disposition = item.kind === "audit" ? "audit_no_issue" : "no_issue";
+    else if (actionName === "later") disposition = "deferred";
+    else if (actionName === "done")
+      disposition = item.kind === "audit" ? "audit_found_issue" : "corrected";
+    else throw new Error("Choose a review action.");
+    if (actionName !== "done" && current.text !== context.canonical_text)
+      throw new Error(
+        "The text changed. Choose Done editing, or reopen the point to review the current wording.",
+      );
+    if (actionName === "done") {
+      var touched = item.target_spans.some(function (span) {
+        var index = base.blocks.findIndex(function (b) {
+          return b.block_id === span.block_id;
+        });
+        return current.blocks[index].text !== context.blocks[index].text;
+      });
+      if (!touched)
+        throw new Error(
+          "Edit this passage in the document first, or choose Keep wording.",
+        );
+      if (item.kind === "audit" && !note.trim())
+        throw new Error("Add a short note describing the issue you found.");
+    }
+    snapshotCurrent_(binding, base, current); // Validate paragraph structure before freezing the action.
+    var action = newAction_(binding, item, context, disposition, note, current);
+    reviewProperty_("bits.action", action);
+    return finishReviewAction_();
+  });
+}
+function applyReviewSuggestion(itemId, contextId, note) {
+  return withReviewLock_(function () {
+    if (typeof note !== "string" || note.length > 5000)
+      throw new Error("Keep notes under 5,000 characters.");
+    if (reviewProperty_("bits.action"))
+      throw new Error("Finish or dismiss the pending save first.");
+    var binding = binding_(),
+      base = baseSnapshot_(binding),
+      run = reviewRun_(binding);
+    var item = selectedItem_(run, itemId),
+      context = openedContext_(binding, itemId, contextId);
+    var current = readCheckpoint_(binding);
+    if (current.text !== context.canonical_text)
+      throw new Error(
+        "The text changed. Open this point again before applying the suggestion.",
+      );
+    var plan = suggestionPlan_(base, context, item);
+    if (!plan || item.kind === "audit")
+      throw new Error("Edit this passage directly in the document.");
+    var bound = boundDocument_(binding);
+    verifyBlockAnchors_(binding, base, bound.tab);
+    var element = bound.tab.getBody().getChild(plan.index).editAsText();
+    var action = newAction_(binding, item, context, "corrected", note, current);
+    action.index = plan.index;
+    action.patch = capturePatch_(element, plan.before, plan.after);
+    var texts = current.blocks.map(function (b) {
+      return b.text;
+    });
+    texts[plan.index] = plan.after;
+    action.afterHash = checkpointHash_(texts.join("\n"));
+    action.phase = "prepared";
+    reviewProperty_("bits.action", action); // Persist BEFORE any write; reject oversize receipts first.
+    if (readCheckpoint_(binding).text !== current.text)
+      throw new Error(
+        "The document changed. Dismiss the pending action and reopen the point.",
+      );
+    writePatch_(element, action.patch, false);
+    bound.doc.setSelection(
+      bound.tab
+        .newRange()
+        .addElement(bound.tab.getBody().getChild(plan.index))
+        .build(),
+    );
+    action.phase = "written";
+    reviewProperty_("bits.action", action);
+    // The next RPC is deliberately separate, so Google can save the manuscript.
+    return { pending: true, itemId: itemId };
+  });
+}
+function finishReviewSuggestion() {
+  return withReviewLock_(finishReviewAction_);
+}
+function finishReviewAction_() {
+  var binding = binding_(),
+    action = reviewProperty_("bits.action");
+  assertActionBinding_(binding, action);
+  var base = baseSnapshot_(binding);
+  if (!action.reviewedId) {
+    var current = readCheckpoint_(binding);
+    if (checkpointHash_(current.text) !== action.afterHash)
+      throw new Error(
+        "The document has not saved yet or has changed. Retry saving; if you edited it, dismiss this save and reopen the point.",
+      );
+    var reviewed = snapshotCurrent_(
+      binding,
+      base,
+      current,
+      action.snapshotRequestId,
+    );
+    action.reviewedId = reviewed.id;
+    reviewProperty_("bits.action", action);
+  }
+  // Frozen IDs and request ID make a lost-response retry exactly idempotent.
+  var decision = apiRequest_(projectPath_(binding) + "/decisions", "post", {
+    client_request_id: action.requestId,
+    item_id: action.itemId,
+    base_snapshot_id: base.id,
+    context_snapshot_id: action.contextId,
+    reviewed_snapshot_id: action.reviewedId,
+    disposition: action.disposition,
+    note: action.note,
+  });
+  var key = "bits.undo:" + binding.runId + ":" + action.itemId;
+  if (action.patch && !action.undo)
+    reviewProperty_(key, {
+      decisionId: decision.id,
+      patch: action.patch,
+      index: action.index,
+    });
+  else reviewProperty_(key, null);
+  reviewProperty_("bits.action", null);
+  reviewProperty_("bits.context", null);
+  return { itemId: action.itemId, decision: decision, review: refreshReview() };
+}
+function undoReviewAction(itemId) {
+  return withReviewLock_(function () {
+    if (reviewProperty_("bits.action"))
+      throw new Error("Finish or dismiss the pending save first.");
+    var binding = binding_(),
+      base = baseSnapshot_(binding),
+      run = reviewRun_(binding);
+    var item = selectedItem_(run, itemId),
+      latest = latestDecision_(itemId, run.decisions);
+    var receipt = reviewProperty_("bits.undo:" + binding.runId + ":" + itemId);
+    var current = readCheckpoint_(binding),
+      context = snapshotCurrent_(binding, base, current);
+    var action = newAction_(binding, item, context, "reopened", "", current);
+    action.undo = true;
+    if (receipt && latest && receipt.decisionId === latest.id) {
+      var bound = boundDocument_(binding);
+      var element = bound.tab.getBody().getChild(receipt.index).editAsText();
+      if (element.getText() !== receipt.patch.after)
+        throw new Error(
+          "This passage has changed since the suggestion. Reopen it to keep your later edits.",
+        );
+      action.patch = receipt.patch;
+      action.index = receipt.index;
+      var texts = current.blocks.map(function (b) {
+        return b.text;
+      });
+      texts[receipt.index] = receipt.patch.before;
+      action.afterHash = checkpointHash_(texts.join("\n"));
+      reviewProperty_("bits.action", action);
+      if (readCheckpoint_(binding).text !== current.text)
+        throw new Error("The document changed. Dismiss this save and retry.");
+      writePatch_(element, receipt.patch, true);
+      bound.doc.setSelection(
+        bound.tab
+          .newRange()
+          .addElement(bound.tab.getBody().getChild(receipt.index))
+          .build(),
+      );
+      return { pending: true, itemId: itemId };
+    }
+    reviewProperty_("bits.action", action);
+    return finishReviewAction_();
+  });
+}
+function reopenReviewItem(itemId) {
+  return withReviewLock_(function () {
+    if (reviewProperty_("bits.action"))
+      throw new Error("Finish or dismiss the pending save first.");
+    var binding = binding_(),
+      base = baseSnapshot_(binding),
+      item = selectedItem_(reviewRun_(binding), itemId);
+    var current = readCheckpoint_(binding),
+      context = snapshotCurrent_(binding, base, current);
+    reviewProperty_(
+      "bits.action",
+      newAction_(binding, item, context, "reopened", "", current),
+    );
+    return finishReviewAction_();
+  });
+}
+function dismissPendingReviewAction() {
+  return withReviewLock_(function () {
+    // Reconcile a possibly successful server decision by rereading the run. Text is never reverted here.
+    var review = refreshReview();
+    reviewProperty_("bits.action", null);
+    reviewProperty_("bits.context", null);
+    review.pendingAction = null;
+    return review;
+  });
+}
+function resumeReview() {
+  var properties = PropertiesService.getUserProperties();
+  if (!properties.getProperty("bits.jwt")) return { signedIn: false };
+  userToken_();
+  if (!properties.getProperty("bits.binding")) return { signedIn: true };
+  return { signedIn: true, review: refreshReview() };
+}
+
 function previewFixture() {
   var fixture = apiRequest_("/api/docs-review/development-fixture", "get");
   var binding = activeBinding_();
@@ -342,51 +674,139 @@ function refreshReview() {
   var run = reviewRun_(binding);
   var current = readCheckpoint_(binding);
   if (run.mode === "live")
-    return liveReviewPresentation_(binding, base, run, current);
+    return enrichReview_(
+      liveReviewPresentation_(binding, base, run, current),
+      binding,
+      base,
+      run,
+      current,
+    );
   verifyBlockAnchors_(binding, base, boundDocument_(binding).tab);
   var cards = run.input_bundle.fixture.analyst_cards;
-  return {
-    baseId: base.id,
-    status: run.status,
-    changed: current.text !== base.canonical_text,
-    message:
-      current.text !== base.canonical_text
-        ? "Chapter changed. Example findings are stale for approval. Corrected requires an explicit before/after review; other decisions need a new assessment."
-        : "Example findings · analyst development material · English approval status unknown.",
-    items: run.items.map(function (item) {
-      var evidence = item.evidence_ids[0];
-      var card = cards.find(function (candidate) {
-        return evidence === "analyst_development_example:" + candidate.id;
-      });
-      return {
-        id: item.id,
-        kind: item.kind,
-        title: card.title,
-        source:
-          card.source ||
-          item.source_spans
+  return enrichReview_(
+    {
+      baseId: base.id,
+      status: run.status,
+      changed: current.text !== base.canonical_text,
+      message:
+        current.text !== base.canonical_text
+          ? "Chapter changed. Example findings are stale for approval. Corrected requires an explicit before/after review; other decisions need a new assessment."
+          : "Example findings · analyst development material · English approval status unknown.",
+      items: run.items.map(function (item) {
+        var evidence = item.evidence_ids[0];
+        var card = cards.find(function (candidate) {
+          return evidence === "analyst_development_example:" + candidate.id;
+        });
+        return {
+          id: item.id,
+          kind: item.kind,
+          title: card.title,
+          source:
+            card.source ||
+            item.source_spans
+              .map(function (span) {
+                return span.quote;
+              })
+              .join("\n"),
+          target: item.target_spans
             .map(function (span) {
               return span.quote;
             })
-            .join("\n"),
-        target: item.target_spans
-          .map(function (span) {
-            return span.quote;
-          })
-          .join("\n\n"),
-        concern: item.explanation,
-        provenance: card.provenance,
-        humanConfirmed: card.human_confirmed,
-        evidence:
-          card.reference || "Supplied chapter and analyst development example",
-        action:
-          card.reviewer_action ||
-          card.desired_behavior ||
-          card.possible_direction ||
-          "",
-      };
-    }),
-  };
+            .join("\n\n"),
+          concern: item.explanation,
+          provenance: card.provenance,
+          humanConfirmed: card.human_confirmed,
+          evidence:
+            card.reference ||
+            "Supplied chapter and analyst development example",
+          action:
+            card.reviewer_action ||
+            card.desired_behavior ||
+            card.possible_direction ||
+            "",
+        };
+      }),
+    },
+    binding,
+    base,
+    run,
+    current,
+  );
+}
+
+function enrichReview_(review, binding, base, run, current) {
+  review.example = run.mode !== "live";
+  review.message =
+    ["queued", "running", "pending_enqueue", "failed", "interrupted"].indexOf(
+      run.status,
+    ) >= 0
+      ? review.message
+      : review.example
+        ? "Practice review · Book 300, Chapter 9"
+        : "Chapter review";
+  review.pendingAction = reviewProperty_("bits.action");
+  if (review.pendingAction) {
+    assertActionBinding_(binding, review.pendingAction);
+    review.pendingAction = { itemId: review.pendingAction.itemId };
+  }
+  review.items.forEach(function (view) {
+    var item = selectedItem_(run, view.id),
+      latest = latestDecision_(view.id, run.decisions);
+    view.state = itemReviewState_(view.id, run.decisions);
+    view.reviewedChanged = !!(
+      latest &&
+      view.state === "reviewed" &&
+      latest.reviewed_target_blocks.some(function (block) {
+        var index = base.blocks.findIndex(function (b) {
+          return b.block_id === block.block_id;
+        });
+        return (
+          !current.blocks[index] || current.blocks[index].text !== block.text
+        );
+      })
+    );
+    if (view.reviewedChanged) view.state = "pending";
+    view.order = Math.min.apply(
+      null,
+      item.target_spans.map(function (span) {
+        return base.blocks.findIndex(function (b) {
+          return b.block_id === span.block_id;
+        });
+      }),
+    );
+    view.source = item.source_spans
+      .map(function (s) {
+        return s.quote;
+      })
+      .join("\n");
+    view.sourceContext =
+      run.input_bundle && run.input_bundle.fixture
+        ? run.input_bundle.fixture.raw_chinese_section
+        : null;
+    view.suggestion = item.proposed_correction;
+    view.summary = item.explanation;
+    view.latestDecision = latest;
+    var undo = reviewProperty_("bits.undo:" + binding.runId + ":" + item.id);
+    view.canUndo = !!(
+      undo &&
+      latest &&
+      undo.decisionId === latest.id &&
+      !view.reviewedChanged
+    );
+    view.changed = item.target_spans.some(function (span) {
+      var index = base.blocks.findIndex(function (b) {
+        return b.block_id === span.block_id;
+      });
+      return (
+        !current.blocks[index] ||
+        current.blocks[index].text !== base.blocks[index].text
+      );
+    });
+  });
+  review.items.sort(function (a, b) {
+    return a.order - b.order;
+  });
+  return review;
 }
 
 function focusItem(itemId) {

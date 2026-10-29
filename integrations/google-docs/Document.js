@@ -159,7 +159,7 @@ function loadEmptyTab_(body, text) {
   )
     throw new Error("Load chapter requires an otherwise empty selected tab.");
   documentParagraphs_(body);
-  body.setText(text); // The only manuscript write. Called only by explicit Load chapter.
+  body.setText(text); // Whole-tab writes are allowed only for explicit loading into an empty tab.
 }
 
 function anchorDescriptor_(named, body) {
@@ -305,4 +305,83 @@ function selectItem_(binding, base, item) {
   });
   bound.doc.setActiveTab(binding.tabId);
   bound.doc.setSelection(named.getRange());
+}
+
+function capturePatch_(element, before, after) {
+  if (element.getText() !== before)
+    throw new Error("The passage changed. Open it again.");
+  var patch = textPatch_(before, after);
+  if (!patch) throw new Error("This suggestion already matches the document.");
+  patch.before = before;
+  patch.after = after;
+  patch.attributes = element.getAttributes(
+    Math.min(patch.start, before.length - 1),
+  );
+  patch.originalStyles = [];
+  var end = patch.start + patch.remove.length;
+  var starts = [patch.start].concat(
+    element.getTextAttributeIndices().filter(function (i) {
+      return i > patch.start && i < end;
+    }),
+  );
+  starts.forEach(function (start, i) {
+    if (start < end)
+      patch.originalStyles.push({
+        start: start - patch.start,
+        end: (starts[i + 1] || end) - patch.start - 1,
+        attributes: element.getAttributes(start),
+      });
+  });
+  return patch;
+}
+
+function writePatch_(element, patch, undo) {
+  if (element.getText() !== (undo ? patch.after : patch.before))
+    throw new Error(
+      "The passage changed. Your later edits have been kept. Open the point again.",
+    );
+  var remove = undo ? patch.insert : patch.remove;
+  var insert = undo ? patch.remove : patch.insert;
+  if (remove.length)
+    element.deleteText(patch.start, patch.start + remove.length - 1);
+  if (insert.length) {
+    element.insertText(patch.start, insert);
+    element.setAttributes(
+      patch.start,
+      patch.start + insert.length - 1,
+      patch.attributes,
+    );
+    if (undo)
+      patch.originalStyles.forEach(function (style) {
+        element.setAttributes(
+          patch.start + style.start,
+          patch.start + style.end,
+          style.attributes,
+        );
+      });
+  }
+}
+
+function selectCurrentPassage_(binding, base, item, current) {
+  var bound = boundDocument_(binding);
+  verifyBlockAnchors_(binding, base, bound.tab);
+  var range = bound.tab.newRange();
+  item.target_spans.forEach(function (span) {
+    var index = base.blocks.findIndex(function (b) {
+      return b.block_id === span.block_id;
+    });
+    if (index < 0) throw new Error("Passage missing. Start a fresh review.");
+    var paragraph = bound.tab.getBody().getChild(index);
+    // An edited block is shown whole. Never guess a quote's new location.
+    if (current.blocks[index].text === base.blocks[index].text) {
+      var offsets = quoteOffsets_(
+        current.blocks[index].text,
+        span.quote,
+        span.occurrence,
+      );
+      range.addElement(paragraph.editAsText(), offsets.start, offsets.end);
+    } else range.addElement(paragraph);
+  });
+  bound.doc.setActiveTab(binding.tabId);
+  bound.doc.setSelection(range.build());
 }

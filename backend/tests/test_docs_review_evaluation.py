@@ -68,6 +68,38 @@ class Queue:
         pass
 
 
+async def test_reopened_lesson_cannot_enter_new_experiment(client, admin_token, completed_review, live_config):
+    root, _, response = await propose(client, admin_token, completed_review)
+    lesson = response.json()
+    confirmed = await client.post(
+        root + f"/lessons/{lesson['id']}/confirm",
+        headers=headers(admin_token),
+        json={
+            "client_request_id": "confirm",
+            "expected_content_hash": lesson["content_hash"],
+            "expected_conflict_hash": lesson["conflict_hash"],
+            "conflict_resolutions": {},
+        },
+    )
+    assert confirmed.status_code == 200
+    _, snapshot, _, item = completed_review
+    reopened = await client.post(
+        root + "/decisions",
+        headers=headers(admin_token),
+        json={
+            **decision_payload(snapshot, item),
+            "client_request_id": "reopen",
+            "context_snapshot_id": snapshot["id"],
+            "disposition": "reopened",
+        },
+    )
+    assert reopened.status_code == 201
+    experiment = await client.post(
+        root + "/experiments", headers=headers(admin_token), json=experiment_payload(lesson_ids=[lesson["id"]])
+    )
+    assert experiment.status_code == 409, experiment.text
+
+
 def completion(value):
     return SimpleNamespace(
         usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20, total_tokens=120),

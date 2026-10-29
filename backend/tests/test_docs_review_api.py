@@ -10,6 +10,30 @@ from app.core.config import get_settings
 from app.models.setting import Setting
 
 
+async def test_undo_records_reopened_with_changed_text(client, admin_token, completed_review, docs_snapshot_payload):
+    p, base, _, item = completed_review
+    changed = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        {
+            **docs_snapshot_payload,
+            "client_request_id": "changed-for-undo",
+            "blocks": [dict(block_id="target-1", text="New Yidam wording", kind="paragraph")],
+        },
+    )
+    response = await client.post(
+        f"/api/docs-review/projects/{p['id']}/decisions",
+        headers=headers(admin_token),
+        json={
+            **decision_payload(base, item),
+            "context_snapshot_id": changed["id"],
+            "disposition": "reopened",
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
 @pytest.fixture(autouse=True)
 def enabled(monkeypatch):
     monkeypatch.setitem(get_settings().__dict__, "docs_review_enabled", True)
@@ -185,6 +209,73 @@ def decision_payload(s, item):
         disposition="no_issue",
         note="Source checked",
     )
+
+
+async def test_current_context_decisions_and_reopening(
+    client, admin_token, reviewer_token, completed_review, docs_snapshot_payload
+):
+    p, base, run, item = completed_review
+    root = f"/api/docs-review/projects/{p['id']}"
+    context = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        {
+            **docs_snapshot_payload,
+            "client_request_id": "context",
+            "blocks": [{"block_id": "target-1", "text": "Edited title with Yidam", "kind": "paragraph"}],
+        },
+    )
+    payload = {
+        **decision_payload(base, item),
+        "context_snapshot_id": context["id"],
+        "reviewed_snapshot_id": context["id"],
+    }
+    kept = await client.post(root + "/decisions", json=payload, headers=headers(admin_token))
+    assert kept.status_code == 201, kept.text
+    assert kept.json()["context_snapshot_id"] == context["id"]
+    for index, disposition in enumerate(("reopened", "deferred")):
+        result = await client.post(
+            root + "/decisions",
+            json={**payload, "client_request_id": f"action-{index}", "disposition": disposition},
+            headers=headers(admin_token),
+        )
+        assert result.status_code == 201, result.text
+    latest = await client.get(root + f"/runs/{run.id}", headers=headers(admin_token))
+    assert [d["disposition"] for d in latest.json()["decisions"]] == ["no_issue", "reopened", "deferred"]
+    assert (await client.get(root + f"/runs/{run.id}", headers=headers(reviewer_token))).status_code == 404
+
+
+async def test_context_does_not_approve_edits_after_open_or_unrelated_corrections(
+    client, admin_token, completed_review, docs_snapshot_payload
+):
+    p, base, _run, item = completed_review
+    changed = await snapshot(
+        client,
+        admin_token,
+        p["id"],
+        {
+            **docs_snapshot_payload,
+            "client_request_id": "changed",
+            "blocks": [{"block_id": "target-1", "text": "Changed Yidam", "kind": "paragraph"}],
+        },
+    )
+    payload = {**decision_payload(base, item), "context_snapshot_id": base["id"], "reviewed_snapshot_id": changed["id"]}
+    url = f"/api/docs-review/projects/{p['id']}/decisions"
+    assert (await client.post(url, json=payload, headers=headers(admin_token))).status_code == 409
+    result = await client.post(url, json={**payload, "disposition": "corrected"}, headers=headers(admin_token))
+    assert result.status_code == 201, result.text
+    unchanged = await client.post(
+        url,
+        json={
+            **payload,
+            "client_request_id": "unchanged",
+            "context_snapshot_id": changed["id"],
+            "disposition": "corrected",
+        },
+        headers=headers(admin_token),
+    )
+    assert unchanged.status_code == 409
 
 
 async def test_decisions_are_attributable_idempotent_and_atomic(

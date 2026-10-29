@@ -1,5 +1,5 @@
 {
-  "fixture_version": 1,
+  "fixture_version": 2,
   "book_label": "300",
   "chapter_label": "009",
   "source_language": "zh",
@@ -353,24 +353,25 @@
     {
       "id": "R1",
       "kind": "review_candidate",
-      "title": "Check conditional meaning in the opening",
+      "title": "Check the condition",
       "source": "只要你「自化本尊」，住於「本尊三摩地」，真實而不動搖，是有大益。",
       "english": "as soon as you transform into your yidam and dwell in yidam samadhi in a true and unwavering state",
       "priority": "Meaning review.",
-      "concern": "The Chinese expresses a condition, including genuine and unwavering abiding. “As soon as” may add an immediacy implication. Does the opening preserve the condition without introducing a timing claim?",
+      "concern": "Does “as long as” preserve the condition in 只要 more accurately?",
       "possible_direction": "Consider “provided that” or “as long as,” subject to the reviewer’s reading of the complete sentence. Preserve the qualification about the state of abiding.",
       "learning_candidate": "Distinguish conditional constructions from temporal triggers. Keep the lesson scoped to comparable constructions; do not globally replace every occurrence of “as soon as.”",
       "provenance": "analyst_development_example",
-      "human_confirmed": false
+      "human_confirmed": false,
+      "proposed_correction": "I say that as long as you transform into your yidam and dwell in yidam samadhi in a true and unwavering state, there are great benefits."
     },
     {
       "id": "R2",
       "kind": "review_candidate",
-      "title": "Verify the Eightfold Path term mapping",
-      "source": "正思惟 and 正念 within the eight-item sequence.",
+      "title": "Check the Eightfold Path terms",
+      "source": "八正道：正見、正思惟、正語、正業、正命、正精進、正念、正定。",
       "english": "right mindset and right thought, respectively.",
       "priority": "Terminology and meaning review.",
-      "concern": "Check whether these renderings distinguish the two path factors according to the team’s glossary. A TBSN English preface elsewhere uses “Right Intention” and “Right Mindfulness” in the corresponding positions. This is evidence of a terminology discrepancy worth resolving, not proof that the supplied edition must use the newer wording.",
+      "concern": "Check the English terms for 正思惟 and 正念 against the approved glossary.",
       "reviewer_action": "Confirm the intended mapping and applicable editorial convention, then assess whether any change is needed here. Other terms in the list can be checked in the same review action rather than generating separate noisy alerts.",
       "learning_candidate": "A language- and sense-scoped mapping for the named Eightfold Path list, with edition/style scope if necessary.",
       "reference": "https://en.tbsn.org/wordm/detail/323.html",
@@ -380,11 +381,11 @@
     {
       "id": "R3",
       "kind": "review_candidate",
-      "title": "Decide how to preserve the samadhi wordplay",
+      "title": "Preserve the wordplay",
       "source": "入「四摩地」，睡著了。",
       "english": "they fall asleep when trying to enter samadhi.",
       "priority": "Authorial voice review.",
-      "concern": "The English conveys the falling-asleep meaning, but the Chinese switches from 三摩地 to 四摩地. In another discourse, the author explicitly uses the latter expression for sleep, supporting a wordplay reading here. Should the English preserve that humor through wording or a brief note, or is conveying the meaning sufficient under the project’s style policy?",
+      "concern": "How should the translation carry the play on 三摩地 and 四摩地?",
       "reviewer_action": "Make an editorial decision about voice; do not silently normalize the Chinese. No automatic replacement is proposed.",
       "learning_candidate": "An author-specific example of deliberate term alteration in the context of meditation and drowsiness. Future occurrences merit contextual assessment rather than a blanket spelling correction.",
       "reference": "https://tbsn.org/dynamics/detail/86",
@@ -394,11 +395,11 @@
     {
       "id": "R4",
       "kind": "review_candidate",
-      "title": "Check explanatory additions around qi",
-      "source": "修「氣」是很重要的。 and 用「住氣」及「持氣」，來控制念頭",
+      "title": "Check the explanation of qi",
+      "source": "修「氣」是很重要的。因為「氣動念頭就動」。用「住氣」及「持氣」，來控制念頭，漸漸的穩定心念，集中在本尊的聖像，這是一個很好的方法。",
       "english": "Qi (breathing) practice is crucial and hold the breath (qi) inside you. By letting qi dwell",
       "priority": "Practice terminology review.",
-      "concern": "The English explicitly glosses qi as breathing and turns the two expressions into explanatory phrasing. Verify whether the glossary and the author’s intended usage support this level of specificity. The source excerpt alone does not establish the approved English distinction between 住氣 and 持氣.",
+      "concern": "Check whether the added explanations of qi are supported by the source.",
       "reviewer_action": "Confirm the terminology and intended equivalence. Avoid generating new practice instructions as a proposed fix.",
       "learning_candidate": "A scoped terminology rule distinguishing the relevant concepts and identifying when explanatory glosses are permitted.",
       "provenance": "analyst_development_example",
@@ -407,17 +408,19 @@
     {
       "id": "F1",
       "kind": "false_alarm_check",
-      "title": "An unfamiliar yoga name is not sufficient evidence of error",
+      "title": "Check the four yogas",
       "example": "離戲瑜伽 is rendered Yoga of Renunciation. A generic Buddhist terminology check might prefer a different label. However, a TBSN translation of a Vimalakirti discourse describes renunciation in this position within the same progression, alongside concentration, one taste, and no-practice. That provides evidence against automatically treating “Renunciation” as an error.",
       "desired_behavior": "Consult lineage-specific guidance and the project’s glossary before flagging. If the team confirms this wording, retain the scoped decision as evidence for reducing recurring false alarms. Do not infer that it is approved merely because it appears in another publication.",
       "reference": "https://en.tbsn.org/guidem/detail/3341/Vimalakirti_Sutra_Discourse_57_7_January_2023__-_Chapter_One%E2%80%94Buddhaverse_%28Continued%29.html",
       "provenance": "analyst_development_example",
-      "human_confirmed": false
+      "human_confirmed": false,
+      "source": "專一瑜伽。離戲瑜伽。一味瑜伽。無修瑜伽。",
+      "concern": "Check these lineage terms; an unfamiliar name may still be correct."
     },
     {
       "id": "F2",
       "kind": "false_alarm_check",
-      "title": "Reorganization is not an omitted list item",
+      "title": "Check the list is complete",
       "example": "The Chinese lists six transcendent powers together. The English discusses knowledge of lives in the preceding bullet, then lists five “[other transcendent powers].” A check limited to the second bullet would wrongly report the missing sixth item.",
       "desired_behavior": "Assess coverage over the aligned surrounding passage. Suppress a count-only omission claim. This does not certify the wording of each power; term accuracy is a separate question.",
       "alignment": "surrounding_passage",
@@ -426,7 +429,9 @@
         "target-0022"
       ],
       "provenance": "analyst_development_example",
-      "human_confirmed": false
+      "human_confirmed": false,
+      "source": "尤其是在本尊三摩地中，逐漸能了知「過去世」、「現在世」、「未來世」，宿命的神通均能知曉。甚至，天眼通、天耳通、他心通、神足通、宿命通、漏盡通均可達成。",
+      "concern": "Check that all six abilities are present, allowing for a different English order."
     }
   ]
 }

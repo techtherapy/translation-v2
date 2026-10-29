@@ -233,7 +233,7 @@ async def complete_run(
 
 async def append_decision(db, owner_id, project_id, request: DecisionRequest):
     await get_project(db, owner_id, project_id, lock=True)
-    payload = request.model_dump()
+    payload = request.model_dump(exclude_none=True)
     existing = await _retry(db, DocsReviewDecision, project_id, payload)
     if existing is not None:
         return existing
@@ -251,21 +251,49 @@ async def append_decision(db, owner_id, project_id, request: DecisionRequest):
     run = await _nested(db, DocsReviewRun, project_id, item.run_id)
     base = await _nested(db, DocsReviewSnapshot, project_id, request.base_snapshot_id)
     reviewed = await _nested(db, DocsReviewSnapshot, project_id, request.reviewed_snapshot_id)
+    context = (
+        await _nested(db, DocsReviewSnapshot, project_id, request.context_snapshot_id)
+        if request.context_snapshot_id
+        else base
+    )
     if base.id != run.snapshot_id:
         raise HTTPException(409, "Decision base must be the assessed checkpoint")
-    if base.suggestions_pending or reviewed.suggestions_pending:
+    if base.suggestions_pending or reviewed.suggestions_pending or context.suggestions_pending:
         raise HTTPException(409, "Resolve native suggestions and refresh before recording a decision")
     audit = request.disposition in {"audit_no_issue", "audit_found_issue"}
-    if audit != (item.kind == "audit"):
+    progress_only = request.disposition in {"deferred", "reopened"}
+    if progress_only and not request.context_snapshot_id:
+        raise HTTPException(422, "Open the passage before changing its review state")
+    if not progress_only and audit != (item.kind == "audit"):
         raise HTTPException(422, "Disposition does not match review item kind")
-    if request.disposition != "corrected" and base.target_sha256 != reviewed.target_sha256:
+    change_allowed = request.disposition == "corrected" or (
+        request.context_snapshot_id and request.disposition in {"reopened", "audit_found_issue"}
+    )
+    if not change_allowed and context.target_sha256 != reviewed.target_sha256:
         raise HTTPException(409, "The chapter changed; assess the new checkpoint first")
-    if request.disposition == "corrected" and base.target_sha256 == reviewed.target_sha256:
+    if request.disposition == "corrected" and context.target_sha256 == reviewed.target_sha256:
         raise HTTPException(409, "A correction requires a changed checkpoint")
+    if request.context_snapshot_id:
+        expected_ids = [b["block_id"] for b in base.blocks]
+        if any([b["block_id"] for b in s.blocks] != expected_ids for s in (context, reviewed)):
+            raise HTTPException(409, "Paragraph structure changed; start a fresh review")
+        if request.disposition == "corrected":
+            before = {b["block_id"]: b["text"] for b in context.blocks}
+            after = {b["block_id"]: b["text"] for b in reviewed.blocks}
+            if not any(before[s["block_id"]] != after[s["block_id"]] for s in item.target_spans):
+                raise HTTPException(409, "This passage has not changed")
     if request.disposition == "audit_found_issue" and not request.note.strip():
         raise HTTPException(422, "An audit issue requires a source-grounded note")
     values = {k: v for k, v in payload.items() if k != "client_request_id"}
-    return await _insert(db, DocsReviewDecision, {"project_id": project_id}, payload, reviewer_id=owner_id, **values)
+    return await _insert(
+        db,
+        DocsReviewDecision,
+        {"project_id": project_id},
+        payload,
+        reviewer_id=owner_id,
+        created_at=datetime.now(UTC),
+        **values,
+    )
 
 
 def lesson_content(lesson):

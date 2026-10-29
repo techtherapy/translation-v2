@@ -20,7 +20,7 @@ from rapidfuzz.fuzz import partial_ratio
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.models.docs_review import DocsReviewExperiment, DocsReviewLesson, DocsReviewProject
+from app.models.docs_review import DocsReviewDecision, DocsReviewExperiment, DocsReviewLesson, DocsReviewProject
 from app.schemas.docs_review import EvaluationExample, ExperimentConfiguration, GeneratedDraft
 from app.services.docs_review import repository as repo
 from app.services.docs_review.assessment import AssessmentError, assess_snapshot, freeze_completion_options
@@ -655,10 +655,14 @@ async def create_experiment(db, owner_id, project_id, request):
     ):
         raise HTTPException(422, "Guidance IDs must be unique and cannot impersonate confirmed lessons")
     lessons = []
+    from app.services.docs_review.learning import eligible_evidence
+
     for lid in request.lesson_ids:
         lesson = await repo._nested(db, DocsReviewLesson, project_id, lid)
         if lesson.status != "confirmed" or lesson.content_hash != evidence_hash(repo.lesson_content(lesson)):
             raise HTTPException(409, "Experiments require intact confirmed lessons")
+        decision = await db.get(DocsReviewDecision, lesson.originating_decision_id)
+        await eligible_evidence(db, project, decision)
         lessons.append(account_neutral_lesson(lesson))
     sources = await current_development_sources(db, owner_id)
     sources.extend(request.development_sources)

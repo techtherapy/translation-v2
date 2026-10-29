@@ -6,6 +6,15 @@ export interface ReleaseNote {
 
 const releaseNotes: ReleaseNote[] = [
   {
+    version: '0.25.0',
+    date: '2026-10-29',
+    highlights: [
+      'Google Docs review now shows a compact list, with the Chinese source and a suggested change inside each opened point',
+      'Apply a suggestion, keep the wording, finish a manual edit, or save a point for later without leaving the document',
+      'Undo applied suggestions and return to reviewed points; later edits bring the affected passage back for review',
+    ],
+  },
+  {
     version: '0.24.8',
     date: '2026-10-28',
     highlights: [

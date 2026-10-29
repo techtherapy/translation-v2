@@ -88,6 +88,7 @@ class DocsReviewDecision(ProjectRecord, Base):
     reviewer_id: Mapped[int] = mapped_column(reference("users"))
     base_snapshot_id: Mapped[str] = mapped_column(reference("docs_review_snapshots"))
     reviewed_snapshot_id: Mapped[str] = mapped_column(reference("docs_review_snapshots"))
+    context_snapshot_id: Mapped[str | None] = mapped_column(reference("docs_review_snapshots"))
     disposition: Mapped[str] = mapped_column(String(50))
     note: Mapped[str] = mapped_column(Text)
 

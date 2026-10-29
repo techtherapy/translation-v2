@@ -47,6 +47,14 @@ def corrected_span(span, before, after):
 
 
 async def eligible_evidence(db, project, decision):
+    latest = await db.scalar(
+        select(DocsReviewDecision)
+        .where(DocsReviewDecision.item_id == decision.item_id)
+        .order_by(DocsReviewDecision.created_at.desc(), DocsReviewDecision.id.desc())
+        .limit(1)
+    )
+    if latest.id != decision.id:
+        raise HTTPException(409, "This decision has been superseded; use the latest review")
     if (
         decision.disposition not in {"corrected", "no_issue", "confirmed_issue", "audit_found_issue"}
         or not decision.note.strip()
@@ -54,7 +62,9 @@ async def eligible_evidence(db, project, decision):
         raise HTTPException(
             409, "This decision cannot seed reusable guidance; record an explicit source-grounded decision first"
         )
-    base = await repo._nested(db, DocsReviewSnapshot, project.id, decision.base_snapshot_id)
+    base = await repo._nested(
+        db, DocsReviewSnapshot, project.id, decision.context_snapshot_id or decision.base_snapshot_id
+    )
     reviewed = await repo._nested(db, DocsReviewSnapshot, project.id, decision.reviewed_snapshot_id)
     item = await db.get(DocsReviewItem, decision.item_id)
     if decision.disposition == "corrected":
