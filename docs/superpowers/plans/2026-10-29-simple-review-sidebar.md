@@ -43,7 +43,7 @@
 ### Task 3: Handoff
 - [x] Review the diff independently; fix substantive findings.
 - [x] Run appropriate regression checks, bump release version and notes, document install/testing results.
-- [ ] Commit and push existing feature branch; update live add-on if signed-in access permits.
+- [x] Commit and push existing feature branch; update live add-on if signed-in access permits.
 
 ## Progress and implementation rulings
 - User approved the design and asked to start; execute without a second plan-approval pause.
@@ -58,3 +58,12 @@
 - Final: Ruling: deployed authentication remains a live integration check; session-renewal ownership and recovery are covered by unit tests. Cost if wrong: sign-in recovery might need operator assistance.
 - Final: Ruling: provider output quality is outside this UI change and live AI remains disabled. Cost if wrong: future live suggestions could still need substantial human correction.
 - Final: Ruling: no disposable PostgreSQL test database is configured; use the SQLite round trip and inspect PostgreSQL offline migration SQL, then observe the pilot deployment. Cost if wrong: deployment migration would fail before the new API becomes usable.
+
+## Live installation — 2026-10-29
+- Implementation commit `8c266e3` pushed to `codex/google-docs-review-prototype`. Railway pilot deployment `405917b2-c0b6-4186-bf61-717eccde8ad1` reports successful and active. Startup logs confirm PostgreSQL migration `20260921_docs_review -> 0836b75bd292` and application startup complete.
+- Saved the committed Code, Api, Document, ReviewState and Sidebar sources to the existing personal Apps Script project. Executed its existing latest-code test for the Chapter 9 pilot document with unchanged permissions.
+- Live sidebar resumed the existing authenticated review successfully. Refreshed the practice queue against the supplied chapter already in Tab 2, without replacing manuscript text. Six practice points loaded from the updated fixture.
+- Opened the first point successfully: exact Chinese excerpt, short explanation, word-level suggestion, Use suggestion / Keep wording / Done editing / Do later controls. Google Docs exposed its selection action controls after opening the passage. No reviewer decision was submitted.
+- Live session resume and authenticated API access passed. Expired-session recovery and multi-account isolation remain covered by automated tests, not this live check.
+- Native Google apply/undo and detailed formatting preservation remain unverified. The next manual pilot action is to try Use suggestion and Undo in this disposable Chapter 9 document. The supplied fixture is a practice exercise, not a claim of established translation errors or an independent quality evaluation.
+- A readable screenshot of the local interaction preview is saved separately for the handoff. It illustrates the same Sidebar.html; it is not evidence of native Google writes. Minor keyboard-focus follow-up remains deferred as recorded above.
